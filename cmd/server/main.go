@@ -17,6 +17,10 @@ func main() {
 
 	// Обработчик обновлений
 	mux.HandleFunc("/update/", func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/update/") {
+			http.Error(w, "Страница не найдена", http.StatusNotFound)
+			return
+		}
 		UpdateHandler(w, r, storage)
 	})
 
@@ -72,10 +76,6 @@ func parseAndValidatePath(path string, w http.ResponseWriter) (string, string, s
 	if len(segments) != 4 {
 		http.Error(w, "Некорректный запрос, пожалуйста, попробуйте ещё раз", http.StatusBadRequest)
 		return "", "", "", fmt.Errorf("Некорректный запрос: %s", path)
-	}
-	if segments[0] != "update" {
-		http.Error(w, "Тип запроса может быть только update, пожалуйста, попробуйте ещё раз", http.StatusBadRequest)
-		return "", "", "", fmt.Errorf("Некорректный тип запроса: %s", segments[0])
 	}
 	if segments[1] != "counter" && segments[1] != "gauge" {
 		http.Error(w, "Тип метрики может быть только counter или gauge, пожалуйста, попробуйте ещё раз", http.StatusBadRequest)
