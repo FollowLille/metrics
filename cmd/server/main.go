@@ -54,7 +54,6 @@ func UpdateHandler(w http.ResponseWriter, r *http.Request, storage *MemStorage) 
 		valueFloat, _ := strconv.ParseFloat(metricValue, 64)
 		storage.UpdateGauge(metricName, valueFloat)
 	}
-	fmt.Println(storage)
 }
 
 func parseAndValidatePath(path string, w http.ResponseWriter) (string, string, string, error) {
