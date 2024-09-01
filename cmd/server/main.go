@@ -67,19 +67,19 @@ func parseAndValidatePath(path string, w http.ResponseWriter) (string, string, s
 	segments := strings.Split(strings.Trim(path, "/"), "/")
 	if len(segments) <= 2 {
 		http.Error(w, "Некорректный запрос, пожалуйста, попробуйте ещё раз", http.StatusNotFound)
-		return "", "", "", fmt.Errorf("Некорректный запрос: %s", path)
+		return "", "", "", fmt.Errorf("некорректный запрос: %s", path)
 	}
 	if len(segments) != 4 {
 		http.Error(w, "Некорректный запрос, пожалуйста, попробуйте ещё раз", http.StatusBadRequest)
-		return "", "", "", fmt.Errorf("Некорректный запрос: %s", path)
+		return "", "", "", fmt.Errorf("некорректный запрос: %s", path)
 	}
 	if segments[1] != "counter" && segments[1] != "gauge" {
 		http.Error(w, "Тип метрики может быть только counter или gauge, пожалуйста, попробуйте ещё раз", http.StatusBadRequest)
-		return "", "", "", fmt.Errorf("Некорректный тип метрики: %s", segments[1])
+		return "", "", "", fmt.Errorf("некорректный тип метрики: %s", segments[1])
 	}
 	if segments[2] == "" {
 		http.Error(w, "Имя не должно быть пустым, пожалуйста, попробуйте ещё раз", http.StatusNotFound)
-		return "", "", "", fmt.Errorf("Некорректное имя метрики: %s", segments[2])
+		return "", "", "", fmt.Errorf("некорректное имя метрики: %s", segments[2])
 	}
 	if segments[1] == "counter" {
 		if _, err := strconv.ParseInt(segments[3], 10, 64); err != nil {
