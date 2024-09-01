@@ -73,6 +73,10 @@ func parseAndValidatePath(path string, w http.ResponseWriter) (string, string, s
 		http.Error(w, "Некорректный запрос, пожалуйста, попробуйте ещё раз", http.StatusBadRequest)
 		return "", "", "", fmt.Errorf("Некорректный запрос: %s", path)
 	}
+	if segments[0] != "update" {
+		http.Error(w, "Тип запроса может быть только update, пожалуйста, попробуйте ещё раз", http.StatusBadRequest)
+		return "", "", "", fmt.Errorf("Некорректный тип запроса: %s", segments[0])
+	}
 	if segments[1] != "counter" && segments[1] != "gauge" {
 		http.Error(w, "Тип метрики может быть только counter или gauge, пожалуйста, попробуйте ещё раз", http.StatusBadRequest)
 		return "", "", "", fmt.Errorf("Некорректный тип метрики: %s", segments[1])
