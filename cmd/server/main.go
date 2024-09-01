@@ -17,10 +17,6 @@ func main() {
 
 	// Обработчик обновлений
 	mux.HandleFunc("/update/", func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.URL.Path, "/update/") {
-			http.Error(w, "Страница не найдена", http.StatusNotFound)
-			return
-		}
 		UpdateHandler(w, r, storage)
 	})
 
@@ -32,7 +28,7 @@ func main() {
 }
 
 func HomeHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "Сервер работает!")
+	http.Error(w, "Страница не найдена", http.StatusNotFound)
 }
 
 func UpdateHandler(w http.ResponseWriter, r *http.Request, storage *MemStorage) {
