@@ -65,6 +65,10 @@ func UpdateHandler(w http.ResponseWriter, r *http.Request, storage *MemStorage) 
 
 func parseAndValidatePath(path string, w http.ResponseWriter) (string, string, string, error) {
 	segments := strings.Split(strings.Trim(path, "/"), "/")
+	if len(segments) <= 2 {
+		http.Error(w, "Некорректный запрос, пожалуйста, попробуйте ещё раз", http.StatusNotFound)
+		return "", "", "", fmt.Errorf("Некорректный запрос: %s", path)
+	}
 	if len(segments) != 4 {
 		http.Error(w, "Некорректный запрос, пожалуйста, попробуйте ещё раз", http.StatusBadRequest)
 		return "", "", "", fmt.Errorf("Некорректный запрос: %s", path)
