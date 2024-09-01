@@ -27,7 +27,7 @@ func main() {
 	}
 }
 
-func HomeHandler(w http.ResponseWriter, r *http.Request) {
+func HomeHandler(w http.ResponseWriter, _ *http.Request) {
 	http.Error(w, "Страница не найдена", http.StatusNotFound)
 }
 
@@ -45,12 +45,6 @@ func UpdateHandler(w http.ResponseWriter, r *http.Request, storage *MemStorage) 
 	metricType, metricName, metricValue, err := parseAndValidatePath(fullPath.Path, w)
 	if err != nil {
 		return
-	}
-
-	response := fmt.Sprintf("Тип метрики: %s\nИмя: %s\nЗначение: %v\n", metricType, metricName, metricValue)
-	_, err = w.Write([]byte(response))
-	if err != nil {
-		panic(err)
 	}
 
 	if metricType == "counter" {
