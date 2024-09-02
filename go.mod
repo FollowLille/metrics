@@ -1,3 +1,3 @@
 module github.com/FollowLille/metrics
 
-go 1.22.4
+go 1.22.5
