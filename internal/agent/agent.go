@@ -53,7 +53,13 @@ func (a *Agent) ChangeAddress(address string) error {
 	if u.Port() != "" {
 		return errors.New(fmt.Sprintf("некорректный адрес: %s, адрес не должен содержать порт", address))
 	}
-	a.ServerAddress = address
+	if u.Hostname() == "" {
+		return errors.New("некорректный адрес: " + address)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return errors.New("некорректный адрес: " + address)
+	}
+	a.ServerAddress = u.Hostname()
 	return nil
 }
 
@@ -72,22 +78,23 @@ func (a *Agent) GetMetrics() {
 	a.metrics = m
 }
 
-func (a *Agent) SendMetrics() {
+func (a *Agent) SendMetrics() error {
 	for name, value := range a.metrics {
 		metricType := "gauge"
 		if name == "PollCount" {
 			metricType = "counter"
 		}
 
-		addr := fmt.Sprintf("%s:%d/update/%s/%s/%f", a.ServerAddress, a.ServerPort, metricType, name, value)
+		addr := fmt.Sprintf("http://%s:%d/update/%s/%s/%f", a.ServerAddress, a.ServerPort, metricType, name, value)
 		resp, err := http.Post(addr, config.ContentType, nil)
 		if err != nil {
-			fmt.Println(err)
+			return err
 		}
 		if resp.StatusCode != 200 {
 			panic(fmt.Errorf("некорректный статус код: %d", resp.StatusCode))
 		}
 	}
+	return nil
 }
 
 func (a *Agent) Run() {
@@ -101,7 +108,10 @@ func (a *Agent) Run() {
 			a.GetMetrics()
 			fmt.Println(a.metrics)
 		case <-reportTicker.C:
-			a.SendMetrics()
+			err := a.SendMetrics()
+			if err != nil {
+				panic(err)
+			}
 		}
 	}
 }

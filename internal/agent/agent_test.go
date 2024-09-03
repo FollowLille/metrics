@@ -25,7 +25,7 @@ func TestAgent_ChangeAddress(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "check_change_address",
+			name: "change_address",
 			fields: fields{
 				ServerAddress:      config.Address,
 				ServerPort:         config.Port,
@@ -34,12 +34,40 @@ func TestAgent_ChangeAddress(t *testing.T) {
 				ReportSendInterval: config.ReportSendInterval,
 				metrics:            make(map[string]float64),
 			},
-			args:    "127.0.0.1",
+			args:    "http://127.0.0.1",
 			want:    "127.0.0.1",
 			wantErr: false,
 		},
 		{
-			name: "check_error_change_address",
+			name: "change_address_without_prefix",
+			fields: fields{
+				ServerAddress:      config.Address,
+				ServerPort:         config.Port,
+				PollCount:          0,
+				PollInterval:       config.PollInterval,
+				ReportSendInterval: config.ReportSendInterval,
+				metrics:            make(map[string]float64),
+			},
+			args:    "http://example.com",
+			want:    "example.com",
+			wantErr: false,
+		},
+		{
+			name: "change_address_with_port_error",
+			fields: fields{
+				ServerAddress:      config.Address,
+				ServerPort:         config.Port,
+				PollCount:          0,
+				PollInterval:       config.PollInterval,
+				ReportSendInterval: config.ReportSendInterval,
+				metrics:            make(map[string]float64),
+			},
+			args:    "http://127.0.0.1:8090",
+			want:    "localhost",
+			wantErr: true,
+		},
+		{
+			name: "error_change_address",
 			fields: fields{
 				ServerAddress:      config.Address,
 				ServerPort:         config.Port,
@@ -97,7 +125,7 @@ func TestAgent_ChangeIntervalByName(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "check_change_interval",
+			name: "change_interval",
 			fields: fields{
 				ServerAddress:      config.Address,
 				ServerPort:         config.Port,
@@ -111,7 +139,7 @@ func TestAgent_ChangeIntervalByName(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "check_error_change_poll_interval",
+			name: "error_change_poll_interval",
 			fields: fields{
 				ServerAddress:      "localhost",
 				ServerPort:         8080,
@@ -125,7 +153,7 @@ func TestAgent_ChangeIntervalByName(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "check_error_change_report_interval",
+			name: "error_change_report_interval",
 			fields: fields{
 				ServerAddress:      config.Address,
 				ServerPort:         config.Port,
@@ -139,7 +167,7 @@ func TestAgent_ChangeIntervalByName(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "check_error_change_non_exists_interval",
+			name: "error_change_non_exists_interval",
 			fields: fields{
 				ServerAddress:      config.Address,
 				ServerPort:         config.Port,
@@ -198,7 +226,7 @@ func TestAgent_ChangePort(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "check_change_port",
+			name: "change_port",
 			fields: fields{
 				ServerAddress:      config.Address,
 				ServerPort:         config.Port,
@@ -212,7 +240,7 @@ func TestAgent_ChangePort(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "check_error_change_port_less_1024",
+			name: "error_change_port_less_1024",
 			fields: fields{
 				ServerAddress:      config.Address,
 				ServerPort:         config.Port,
@@ -262,7 +290,7 @@ func TestAgent_GetMetrics(t *testing.T) {
 		fields fields
 	}{
 		{
-			name: "check_not_empty_metrics",
+			name: "not_empty_metrics",
 			fields: fields{
 				ServerAddress:      config.Address,
 				ServerPort:         config.Port,
@@ -290,13 +318,60 @@ func TestAgent_GetMetrics(t *testing.T) {
 	}
 }
 
+func TestAgent_SendMetrics(t *testing.T) {
+	type fields struct {
+		ServerAddress      string
+		ServerPort         int64
+		PollCount          int64
+		PollInterval       time.Duration
+		ReportSendInterval time.Duration
+		metrics            map[string]float64
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		wantErr bool
+	}{
+		{
+			name: "send_metrics",
+			fields: fields{
+				ServerAddress:      config.Address,
+				ServerPort:         config.Port,
+				PollCount:          0,
+				PollInterval:       config.PollInterval,
+				ReportSendInterval: config.ReportSendInterval,
+				metrics:            make(map[string]float64),
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := &Agent{
+				ServerAddress:      tt.fields.ServerAddress,
+				ServerPort:         tt.fields.ServerPort,
+				PollCount:          tt.fields.PollCount,
+				PollInterval:       tt.fields.PollInterval,
+				ReportSendInterval: tt.fields.ReportSendInterval,
+				metrics:            tt.fields.metrics,
+			}
+			err := a.SendMetrics()
+			if tt.wantErr {
+				assert.Error(t, a.SendMetrics(), "Agent.SendMetrics() name = %v, error = %v, wantErr %v", tt.name, err, tt.wantErr)
+			} else {
+				assert.NoError(t, err, "Agent.SendMetrics() name = %v, error = %v, wantErr %v", tt.name, err, tt.wantErr)
+			}
+		})
+	}
+}
 func TestNewAgent(t *testing.T) {
 	tests := []struct {
 		name string
 		want *Agent
 	}{
 		{
-			name: "check_equal_new_agent",
+			name: "equal_new_agent",
 			want: &Agent{
 				ServerAddress:      config.Address,
 				ServerPort:         config.Port,
