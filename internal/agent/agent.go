@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -51,13 +50,13 @@ func (a *Agent) ChangeAddress(address string) error {
 		return err
 	}
 	if u.Port() != "" {
-		return errors.New(fmt.Sprintf("некорректный адрес: %s, адрес не должен содержать порт", address))
+		return fmt.Errorf(fmt.Sprintf("некорректный адрес: %s, адрес не должен содержать порт", address))
 	}
 	if u.Hostname() == "" {
-		return errors.New("некорректный адрес: " + address)
+		return fmt.Errorf("некорректный адрес: " + address)
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return errors.New("некорректный адрес: " + address)
+		return fmt.Errorf("некорректный адрес: " + address)
 	}
 	a.ServerAddress = u.Hostname()
 	return nil
@@ -91,7 +90,11 @@ func (a *Agent) SendMetrics() error {
 			return err
 		}
 		if resp.StatusCode != 200 {
-			panic(fmt.Errorf("некорректный статус код: %d", resp.StatusCode))
+			return fmt.Errorf("некорректный статус код: %d", resp.StatusCode)
+		}
+		err = resp.Body.Close()
+		if err != nil {
+			return err
 		}
 	}
 	return nil
