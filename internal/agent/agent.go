@@ -50,13 +50,13 @@ func (a *Agent) ChangeAddress(address string) error {
 		return err
 	}
 	if u.Port() != "" {
-		return fmt.Errorf(fmt.Sprintf("некорректный адрес: %s, адрес не должен содержать порт", address))
+		return fmt.Errorf("некорректный адрес: %s, адрес не должен содержать порт", address)
 	}
 	if u.Hostname() == "" {
-		return fmt.Errorf("некорректный адрес: " + address)
+		return fmt.Errorf("некорректный адрес: %s", address)
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return fmt.Errorf("некорректный адрес: " + address)
+		return fmt.Errorf("некорректный адрес: %s", address)
 	}
 	a.ServerAddress = u.Hostname()
 	return nil
