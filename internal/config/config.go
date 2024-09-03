@@ -7,7 +7,7 @@ import (
 const (
 	PollInterval       = 2 * time.Second
 	ReportSendInterval = 10 * time.Second
-	Address            = "localhost"
+	Address            = "http://localhost"
 	Port               = 8080
 	ContentType        = "text/plain"
 )

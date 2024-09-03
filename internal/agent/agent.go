@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -30,6 +31,9 @@ func NewAgent() *Agent {
 }
 
 func (a *Agent) ChangeIntervalByName(name string, seconds int64) error {
+	if seconds < 1 {
+		return fmt.Errorf("некорректное значение интервала: %d, интервал можеть быть больше 1 секунды", seconds)
+	}
 	newInterval := time.Second * time.Duration(seconds)
 	if name == "poll" {
 		a.PollInterval = newInterval
@@ -42,9 +46,12 @@ func (a *Agent) ChangeIntervalByName(name string, seconds int64) error {
 }
 
 func (a *Agent) ChangeAddress(address string) error {
-	_, err := url.ParseRequestURI(address)
+	u, err := url.ParseRequestURI(address)
 	if err != nil {
 		return err
+	}
+	if u.Port() != "" {
+		return errors.New(fmt.Sprintf("некорректный адрес: %s, адрес не должен содержать порт", address))
 	}
 	a.ServerAddress = address
 	return nil
@@ -62,6 +69,7 @@ func (a *Agent) GetMetrics() {
 	m := metrics.GetRuntimeMetrics()
 	a.PollCount++
 	m["PollCount"] = float64(a.PollCount)
+	a.metrics = m
 }
 
 func (a *Agent) SendMetrics() {
@@ -71,8 +79,7 @@ func (a *Agent) SendMetrics() {
 			metricType = "counter"
 		}
 
-		addr := fmt.Sprintf("http://%s:%d/update/%s/%s/%f", a.ServerAddress, a.ServerPort, metricType, name, value)
-
+		addr := fmt.Sprintf("%s:%d/update/%s/%s/%f", a.ServerAddress, a.ServerPort, metricType, name, value)
 		resp, err := http.Post(addr, config.ContentType, nil)
 		if err != nil {
 			fmt.Println(err)
@@ -84,6 +91,7 @@ func (a *Agent) SendMetrics() {
 }
 
 func (a *Agent) Run() {
+	fmt.Println("Запуск агента")
 	pollTicker := time.NewTicker(a.PollInterval)
 	reportTicker := time.NewTicker(a.ReportSendInterval)
 
@@ -91,6 +99,7 @@ func (a *Agent) Run() {
 		select {
 		case <-pollTicker.C:
 			a.GetMetrics()
+			fmt.Println(a.metrics)
 		case <-reportTicker.C:
 			a.SendMetrics()
 		}

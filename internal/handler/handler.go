@@ -25,7 +25,7 @@ func UpdateHandler(w http.ResponseWriter, r *http.Request, storage *storage.MemS
 		return
 	}
 
-	metricType, metricName, metricValue, err := parseAndValidatePath(fullPath.Path, w)
+	metricType, metricName, metricValue, err := ParseAndValidatePath(fullPath.Path, w)
 	if err != nil {
 		return
 	}
@@ -39,7 +39,7 @@ func UpdateHandler(w http.ResponseWriter, r *http.Request, storage *storage.MemS
 	}
 }
 
-func parseAndValidatePath(path string, w http.ResponseWriter) (string, string, string, error) {
+func ParseAndValidatePath(path string, w http.ResponseWriter) (string, string, string, error) {
 	segments := strings.Split(strings.Trim(path, "/"), "/")
 	if len(segments) <= 2 {
 		http.Error(w, "Некорректный запрос, пожалуйста, попробуйте ещё раз", http.StatusNotFound)
