@@ -34,8 +34,8 @@ func TestAgent_ChangeAddress(t *testing.T) {
 				ReportSendInterval: config.ReportSendInterval,
 				metrics:            make(map[string]float64),
 			},
-			args:    "http://127.0.0.1",
-			want:    "http://127.0.0.1",
+			args:    "127.0.0.1",
+			want:    "127.0.0.1",
 			wantErr: false,
 		},
 		{
@@ -48,8 +48,8 @@ func TestAgent_ChangeAddress(t *testing.T) {
 				ReportSendInterval: config.ReportSendInterval,
 				metrics:            make(map[string]float64),
 			},
-			args:    "http://localhost:8080",
-			want:    "http://localhost",
+			args:    "localhost:8080",
+			want:    "localhost",
 			wantErr: true,
 		},
 	}
