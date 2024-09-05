@@ -86,7 +86,7 @@ func GetValueHandler(c *gin.Context, storage *storage.MemStorage) {
 			c.String(http.StatusNotFound, "Gauge с именем "+metricName+" не найден")
 			return
 		}
-		c.String(http.StatusOK, fmt.Sprintf("%f", value))
+		c.String(http.StatusOK, fmt.Sprintf("%f", strconv.FormatFloat(value, 'g', -1, 64)))
 	default:
 		c.String(http.StatusBadRequest, "Некорректное имя метрики, требуется counter или gauge")
 	}
