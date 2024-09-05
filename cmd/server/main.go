@@ -2,29 +2,37 @@ package main
 
 import (
 	"fmt"
-	"net/http"
 
 	"github.com/FollowLille/metrics/internal/handler"
 	"github.com/FollowLille/metrics/internal/server"
 	"github.com/FollowLille/metrics/internal/storage"
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
 	metricsStorage := storage.NewMemStorage()
-	mux := http.NewServeMux()
 
-	// Просто для проверки корректного запуска
-	mux.HandleFunc("/", handler.HomeHandler)
+	router := gin.Default()
+
+	// Обработчик стартовой страницы
+	router.GET("/", func(context *gin.Context) {
+		handler.HomeHandler(context, metricsStorage)
+	})
 
 	// Обработчик обновлений
-	mux.HandleFunc("/update/", func(w http.ResponseWriter, r *http.Request) {
-		handler.UpdateHandler(w, r, metricsStorage)
+	router.POST("/update/:type/:name/:value", func(c *gin.Context) {
+		handler.UpdateHandler(c, metricsStorage)
+	})
+
+	// Обработчик получения метрик
+	router.GET("/value/:type/:name", func(c *gin.Context) {
+		handler.GetValueHandler(c, metricsStorage)
 	})
 
 	// Запуск HTTP-сервера
 	s := server.NewServer()
 	addr := fmt.Sprintf("%s:%d", s.Address, s.Port)
-	err := http.ListenAndServe(addr, mux)
+	err := router.Run(addr)
 
 	if err != nil {
 		panic(err)

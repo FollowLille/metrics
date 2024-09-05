@@ -82,19 +82,19 @@ func (a *Agent) SendMetrics() error {
 		metricType := "gauge"
 		if name == "PollCount" {
 			metricType = "counter"
-		}
 
-		addr := fmt.Sprintf("http://%s:%d/update/%s/%s/%f", a.ServerAddress, a.ServerPort, metricType, name, value)
-		resp, err := http.Post(addr, config.ContentType, nil)
-		if err != nil {
-			return err
-		}
-		if resp.StatusCode != 200 {
-			return fmt.Errorf("некорректный статус код: %d", resp.StatusCode)
-		}
-		err = resp.Body.Close()
-		if err != nil {
-			return err
+			addr := fmt.Sprintf("http://%s:%d/update/%s/%s/%f", a.ServerAddress, a.ServerPort, metricType, name, value)
+			resp, err := http.Post(addr, config.ContentType, nil)
+			if err != nil {
+				return err
+			}
+			if err := resp.Body.Close(); err != nil {
+				return err
+			}
+
+			if resp.StatusCode != 200 {
+				return fmt.Errorf("некорректный статус код: %d", resp.StatusCode)
+			}
 		}
 	}
 	return nil

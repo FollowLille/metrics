@@ -3,70 +3,91 @@ package handler
 import (
 	"fmt"
 	"net/http"
-	"net/url"
 	"strconv"
-	"strings"
 
 	"github.com/FollowLille/metrics/internal/storage"
+	"github.com/gin-gonic/gin"
 )
 
-func HomeHandler(w http.ResponseWriter, _ *http.Request) {
-	http.Error(w, "Страница не найдена", http.StatusNotFound)
+func HomeHandler(c *gin.Context, s *storage.MemStorage) {
+	// Получение всех метрик
+	gauges := s.GetAllGauges()
+	counters := s.GetAllCounters()
+
+	// Формирование HTML-страницы
+	html := "<!DOCTYPE html><html><head><title>Metrics</title></head><body>"
+	html += "<h1>Metrics</h1>"
+
+	html += "<h2>Counters</h2><ul>"
+	for name, value := range counters {
+		html += fmt.Sprintf("<li>%s: %d</li>", name, value)
+	}
+	html += "</ul>"
+
+	html += "<h2>Gauges</h2><ul>"
+	for name, value := range gauges {
+		html += fmt.Sprintf("<li>%s: %.2f</li>", name, value)
+	}
+	html += "</ul>"
+
+	html += "</body></html>"
+
+	// Отправка HTML-страницы в ответе
+	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
 }
 
-func UpdateHandler(w http.ResponseWriter, r *http.Request, storage *storage.MemStorage) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Можно использовать только метод Post", http.StatusMethodNotAllowed)
-		return
-	}
-	fullPath, err := url.Parse(r.URL.Path)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
+func UpdateHandler(c *gin.Context, storage *storage.MemStorage) {
+	metricType := c.Param("type")
+	metricName := c.Param("name")
+	metricValue := c.Param("value")
 
-	metricType, metricName, metricValue, err := ParseAndValidatePath(fullPath.Path, w)
-	if err != nil {
-		return
+	if metricName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Не заполнено имя метрики"})
+	} else if metricValue == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Не заполнено значение метрики"})
 	}
-
-	if metricType == "counter" {
-		valueInt, _ := strconv.ParseInt(metricValue, 10, 64)
-		storage.UpdateCounter(metricName, valueInt)
-	} else if metricType == "gauge" {
-		valueFloat, _ := strconv.ParseFloat(metricValue, 64)
-		storage.UpdateGauge(metricName, valueFloat)
+	switch metricType {
+	case "counter":
+		value, err := strconv.ParseInt(metricValue, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Значение метрики должно быть целым числом"})
+			return
+		}
+		storage.UpdateCounter(metricName, value)
+		c.JSON(http.StatusOK, gin.H{"status": "Counter обновлен"})
+	case "gauge":
+		value, err := strconv.ParseFloat(metricValue, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Значение метрики должно быть числом с плавающей точкой"})
+			return
+		}
+		storage.UpdateGauge(metricName, value)
+		c.JSON(http.StatusOK, gin.H{"status": "Gauge обновлен"})
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Тип метрики должен быть counter или gauge"})
 	}
 }
 
-func ParseAndValidatePath(path string, w http.ResponseWriter) (string, string, string, error) {
-	segments := strings.Split(strings.Trim(path, "/"), "/")
-	if len(segments) <= 2 {
-		http.Error(w, "Некорректный запрос, пожалуйста, попробуйте ещё раз", http.StatusNotFound)
-		return "", "", "", fmt.Errorf("некорректный запрос: %s", path)
-	}
-	if len(segments) != 4 {
-		http.Error(w, "Некорректный запрос, пожалуйста, попробуйте ещё раз", http.StatusBadRequest)
-		return "", "", "", fmt.Errorf("некорректный запрос: %s", path)
-	}
-	if segments[1] != "counter" && segments[1] != "gauge" {
-		http.Error(w, "Тип метрики может быть только counter или gauge, пожалуйста, попробуйте ещё раз", http.StatusBadRequest)
-		return "", "", "", fmt.Errorf("некорректный тип метрики: %s", segments[1])
-	}
-	if segments[2] == "" {
-		http.Error(w, "Имя не должно быть пустым, пожалуйста, попробуйте ещё раз", http.StatusNotFound)
-		return "", "", "", fmt.Errorf("некорректное имя метрики: %s", segments[2])
-	}
-	if segments[1] == "counter" {
-		if _, err := strconv.ParseInt(segments[3], 10, 64); err != nil {
-			http.Error(w, "Значение должно быть целым числом, пожалуйста, попробуйте ещё раз", http.StatusBadRequest)
-			return "", "", "", err
+func GetValueHandler(c *gin.Context, storage *storage.MemStorage) {
+	metricType := c.Param("type")
+	metricName := c.Param("name")
+
+	switch metricType {
+	case "counter":
+		value, exists := storage.GetCounter(metricName)
+		if !exists {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Counter с именем " + metricName + " не найден"})
+			return
 		}
-	} else if segments[1] == "gauge" {
-		if _, err := strconv.ParseFloat(segments[3], 64); err != nil {
-			http.Error(w, "Значение должно быть числом с точкой, пожалуйста, попробуйте ещё раз", http.StatusBadRequest)
-			return "", "", "", err
+		c.JSON(http.StatusOK, gin.H{"name": metricName, "value": value})
+	case "gauge":
+		value, exists := storage.GetGauge(metricName)
+		if !exists {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Gauge not found"})
+			return
 		}
+		c.JSON(http.StatusOK, gin.H{"name": metricName, "value": value})
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid metric type"})
 	}
-	return segments[1], segments[2], segments[3], nil
 }
