@@ -42,29 +42,29 @@ func UpdateHandler(c *gin.Context, storage *storage.MemStorage) {
 	metricValue := c.Param("value")
 
 	if metricName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Не заполнено имя метрики"})
+		c.String(http.StatusBadRequest, "Не заполнено имя метрики")
 	} else if metricValue == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Не заполнено значение метрики"})
+		c.String(http.StatusBadRequest, "Не заполнено значение метрики")
 	}
 	switch metricType {
 	case "counter":
 		value, err := strconv.ParseInt(metricValue, 10, 64)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Значение метрики должно быть целым числом"})
+			c.String(http.StatusBadRequest, "Значение метрики должно быть целым числом")
 			return
 		}
 		storage.UpdateCounter(metricName, value)
-		c.JSON(http.StatusOK, gin.H{"status": "Counter обновлен"})
+		c.String(http.StatusOK, "Counter обновлен")
 	case "gauge":
 		value, err := strconv.ParseFloat(metricValue, 64)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Значение метрики должно быть числом с плавающей точкой"})
+			c.String(http.StatusBadRequest, "Значение метрики должно быть числом с плавающей точкой")
 			return
 		}
 		storage.UpdateGauge(metricName, value)
-		c.JSON(http.StatusOK, gin.H{"status": "Gauge обновлен"})
+		c.String(http.StatusOK, "Gauge обновлен")
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Тип метрики должен быть counter или gauge"})
+		c.String(http.StatusBadRequest, "Тип метрики должен быть counter или gauge")
 	}
 }
 
@@ -76,18 +76,18 @@ func GetValueHandler(c *gin.Context, storage *storage.MemStorage) {
 	case "counter":
 		value, exists := storage.GetCounter(metricName)
 		if !exists {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Counter с именем " + metricName + " не найден"})
+			c.String(http.StatusNotFound, "Counter с именем "+metricName+" не найден")
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"name": metricName, "value": value})
+		c.String(http.StatusOK, fmt.Sprintf("%d", value))
 	case "gauge":
 		value, exists := storage.GetGauge(metricName)
 		if !exists {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Gauge not found"})
+			c.String(http.StatusNotFound, "Gauge с именем "+metricName+" не найден")
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"name": metricName, "value": value})
+		c.String(http.StatusOK, fmt.Sprintf("%f", value))
 	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid metric type"})
+		c.String(http.StatusBadRequest, "Некорректное имя метрики, требуется counter или gauge")
 	}
 }
