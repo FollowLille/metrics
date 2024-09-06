@@ -10,6 +10,8 @@ import (
 )
 
 func main() {
+	// Инициализация хранилища и роутера
+	parseFlags()
 	metricsStorage := storage.NewMemStorage()
 
 	router := gin.Default()
@@ -31,7 +33,9 @@ func main() {
 
 	// Запуск HTTP-сервера
 	s := server.NewServer()
+	s.Port = flagPort
 	addr := fmt.Sprintf("%s:%d", s.Address, s.Port)
+	fmt.Println("Сервер запущен на", addr)
 	err := router.Run(addr)
 
 	if err != nil {
