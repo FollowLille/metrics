@@ -29,7 +29,7 @@ func parseFlags() error {
 	if envReportInterval := os.Getenv("REPORT_INTERVAL"); envReportInterval != "" {
 		interval, err := strconv.ParseInt(envReportInterval, 10, 64)
 		if err != nil {
-			return fmt.Errorf("invalid interval value: %s", interval)
+			return fmt.Errorf("invalid interval value: %d", interval)
 		}
 		flagReportInterval = interval
 	}
@@ -37,7 +37,7 @@ func parseFlags() error {
 	if envPollInterval := os.Getenv("POLL_INTERVAL"); envPollInterval != "" {
 		interval, err := strconv.ParseInt(envPollInterval, 10, 64)
 		if err != nil {
-			return fmt.Errorf("invalid interval value: %s", interval)
+			return fmt.Errorf("invalid interval value: %d", interval)
 		}
 		flagPollInterval = interval
 	}

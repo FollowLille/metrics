@@ -50,7 +50,7 @@ func (a *Agent) ChangeAddress(address string) error {
 		return err
 	}
 	if u.Port() != "" {
-		return fmt.Errorf("incorrrect address: %s, port must be empty", address)
+		return fmt.Errorf("invalid address: %s, port must be empty", address)
 	}
 	if u.Hostname() == "" {
 		return fmt.Errorf("invalid address: %s", address)
