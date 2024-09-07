@@ -30,7 +30,7 @@ func (c *Server) ChangeAddress(address string) error {
 
 func (c *Server) ChangePort(port int64) error {
 	if port < 1024 || port > 65535 {
-		return fmt.Errorf("некорректный порт: %d", port)
+		return fmt.Errorf("invalid port: %d", port)
 	}
 	c.Port = port
 	return nil

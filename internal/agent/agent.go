@@ -31,7 +31,7 @@ func NewAgent() *Agent {
 
 func (a *Agent) ChangeIntervalByName(name string, seconds int64) error {
 	if seconds < 1 {
-		return fmt.Errorf("некорректное значение интервала: %d, интервал можеть быть больше 1 секунды", seconds)
+		return fmt.Errorf("incorect inverval value: %d, value must be > 0", seconds)
 	}
 	newInterval := time.Second * time.Duration(seconds)
 	if name == "poll" {
@@ -39,7 +39,7 @@ func (a *Agent) ChangeIntervalByName(name string, seconds int64) error {
 	} else if name == "report" {
 		a.ReportSendInterval = newInterval
 	} else {
-		return fmt.Errorf("некорректное имя интервала: %s", name)
+		return fmt.Errorf("invalid interval name: %s", name)
 	}
 	return nil
 }
@@ -50,10 +50,10 @@ func (a *Agent) ChangeAddress(address string) error {
 		return err
 	}
 	if u.Port() != "" {
-		return fmt.Errorf("некорректный адрес: %s, адрес не должен содержать порт", address)
+		return fmt.Errorf("incorrrect address: %s, port must be empty", address)
 	}
 	if u.Hostname() == "" {
-		return fmt.Errorf("некорректный адрес: %s", address)
+		return fmt.Errorf("invalid address: %s", address)
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
 		return fmt.Errorf("некорректный адрес: %s", address)
@@ -64,7 +64,7 @@ func (a *Agent) ChangeAddress(address string) error {
 
 func (a *Agent) ChangePort(port int64) error {
 	if port < 1024 || port > 65535 {
-		return fmt.Errorf("некорректный порт: %d", port)
+		return fmt.Errorf("invalid port: %d", port)
 	}
 	a.ServerPort = port
 	return nil
@@ -93,7 +93,7 @@ func (a *Agent) SendMetrics() error {
 			}
 
 			if resp.StatusCode != 200 {
-				return fmt.Errorf("некорректный статус код: %d", resp.StatusCode)
+				return fmt.Errorf("invalid status code: %d", resp.StatusCode)
 			}
 		}
 	}
@@ -101,7 +101,7 @@ func (a *Agent) SendMetrics() error {
 }
 
 func (a *Agent) Run() {
-	fmt.Println("Запуск агента")
+	fmt.Println("agent started")
 	pollTicker := time.NewTicker(a.PollInterval)
 	reportTicker := time.NewTicker(a.ReportSendInterval)
 

@@ -23,7 +23,7 @@ func main() {
 	serverAddress := splitedAddress[0]
 	serverPort, err := strconv.ParseInt(splitedAddress[1], 10, 64)
 	if err != nil {
-		fmt.Printf("некорректный адрес: %s", flagAddress)
+		fmt.Printf("invalid address: %s", flagAddress)
 		os.Exit(1)
 	}
 	a.ServerAddress = serverAddress

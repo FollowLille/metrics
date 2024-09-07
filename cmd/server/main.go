@@ -40,7 +40,7 @@ func main() {
 	serverAddress := splitedAddress[0]
 	serverPort, err := strconv.ParseInt(splitedAddress[1], 10, 64)
 	if err != nil {
-		fmt.Printf("некорректный адрес: %s", flagAddress)
+		fmt.Printf("invalid address: %s", flagAddress)
 		os.Exit(1)
 	}
 	s.Address = serverAddress
@@ -50,7 +50,7 @@ func main() {
 		os.Exit(1)
 	}
 	addr := fmt.Sprintf("%s:%d", s.Address, s.Port)
-	fmt.Println("Сервер запущен на", addr)
+	fmt.Println("server running on:", addr)
 	err = router.Run(addr)
 
 	if err != nil {

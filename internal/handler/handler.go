@@ -42,29 +42,29 @@ func UpdateHandler(c *gin.Context, storage *storage.MemStorage) {
 	metricValue := c.Param("value")
 
 	if metricName == "" {
-		c.String(http.StatusBadRequest, "Не заполнено имя метрики")
+		c.String(http.StatusBadRequest, "metric name is empty")
 	} else if metricValue == "" {
-		c.String(http.StatusBadRequest, "Не заполнено значение метрики")
+		c.String(http.StatusBadRequest, "metric value is empty")
 	}
 	switch metricType {
 	case "counter":
 		value, err := strconv.ParseInt(metricValue, 10, 64)
 		if err != nil {
-			c.String(http.StatusBadRequest, "Значение метрики должно быть целым числом")
+			c.String(http.StatusBadRequest, "metric value must be integer")
 			return
 		}
 		storage.UpdateCounter(metricName, value)
-		c.String(http.StatusOK, "Counter обновлен")
+		c.String(http.StatusOK, "counter updated")
 	case "gauge":
 		value, err := strconv.ParseFloat(metricValue, 64)
 		if err != nil {
-			c.String(http.StatusBadRequest, "Значение метрики должно быть числом с плавающей точкой")
+			c.String(http.StatusBadRequest, "metric value must be float")
 			return
 		}
 		storage.UpdateGauge(metricName, value)
-		c.String(http.StatusOK, "Gauge обновлен")
+		c.String(http.StatusOK, "gauge updated")
 	default:
-		c.String(http.StatusBadRequest, "Тип метрики должен быть counter или gauge")
+		c.String(http.StatusBadRequest, "metric type must be counter or gauge")
 	}
 }
 
@@ -76,19 +76,19 @@ func GetValueHandler(c *gin.Context, storage *storage.MemStorage) {
 	case "counter":
 		value, exists := storage.GetCounter(metricName)
 		if !exists {
-			c.String(http.StatusNotFound, "Counter с именем "+metricName+" не найден")
+			c.String(http.StatusNotFound, "counter with name "+metricName+" not found")
 			return
 		}
 		c.String(http.StatusOK, fmt.Sprintf("%d", value))
 	case "gauge":
 		value, exists := storage.GetGauge(metricName)
 		if !exists {
-			c.String(http.StatusNotFound, "Gauge с именем "+metricName+" не найден")
+			c.String(http.StatusNotFound, "gauge with name "+metricName+" not found")
 			return
 		}
 		formattedValue := strconv.FormatFloat(value, 'g', -1, 64)
 		c.String(http.StatusOK, formattedValue)
 	default:
-		c.String(http.StatusBadRequest, "Некорректное имя метрики, требуется counter или gauge")
+		c.String(http.StatusBadRequest, "invalid metric type, must be counter or gauge")
 	}
 }
