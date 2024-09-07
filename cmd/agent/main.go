@@ -12,6 +12,10 @@ import (
 func main() {
 	a := agent.NewAgent()
 	err := parseFlags()
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	a.PollInterval = time.Duration(flagPollInterval) * time.Second
 	a.ReportSendInterval = time.Duration(flagReportInterval) * time.Second
 
@@ -24,9 +28,5 @@ func main() {
 	}
 	a.ServerAddress = serverAddress
 	a.ServerPort = serverPort
-	if err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
 	a.Run()
 }
