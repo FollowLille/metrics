@@ -2,6 +2,9 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"strconv"
+	"strings"
 
 	"github.com/FollowLille/metrics/internal/handler"
 	"github.com/FollowLille/metrics/internal/server"
@@ -33,10 +36,22 @@ func main() {
 
 	// Запуск HTTP-сервера
 	s := server.NewServer()
-	s.Port = flagPort
+	splitedAddress := strings.Split(flagAddress, ":")
+	serverAddress := splitedAddress[0]
+	serverPort, err := strconv.ParseInt(splitedAddress[1], 10, 64)
+	if err != nil {
+		fmt.Printf("некорректный адрес: %s", flagAddress)
+		os.Exit(1)
+	}
+	s.Address = serverAddress
+	s.Port = serverPort
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	addr := fmt.Sprintf("%s:%d", s.Address, s.Port)
 	fmt.Println("Сервер запущен на", addr)
-	err := router.Run(addr)
+	err = router.Run(addr)
 
 	if err != nil {
 		panic(err)

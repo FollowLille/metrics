@@ -4,9 +4,9 @@ import (
 	"github.com/spf13/pflag"
 )
 
-var flagPort int64
+var flagAddress string
 
 func parseFlags() {
-	pflag.Int64VarP(&flagPort, "port", "a", 8080, "port to listen on")
+	pflag.StringVarP(&flagAddress, "address", "a", "localhost:8080", "port to listen on")
 	pflag.Parse()
 }
