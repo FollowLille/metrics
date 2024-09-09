@@ -43,8 +43,10 @@ func UpdateHandler(c *gin.Context, storage *storage.MemStorage) {
 
 	if metricName == "" {
 		c.String(http.StatusBadRequest, "metric name is empty")
+		return
 	} else if metricValue == "" {
 		c.String(http.StatusBadRequest, "metric value is empty")
+		return
 	}
 	switch metricType {
 	case "counter":
