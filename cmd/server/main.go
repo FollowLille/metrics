@@ -6,10 +6,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/FollowLille/metrics/internal/handler"
 	"github.com/FollowLille/metrics/internal/server"
 	"github.com/FollowLille/metrics/internal/storage"
-	"github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -34,26 +35,40 @@ func main() {
 		handler.GetValueHandler(c, metricsStorage)
 	})
 
-	// Запуск HTTP-сервера
-	s := server.NewServer()
-	splitedAddress := strings.Split(flagAddress, ":")
-	serverAddress := splitedAddress[0]
-	serverPort, err := strconv.ParseInt(splitedAddress[1], 10, 64)
-	if err != nil {
-		fmt.Printf("invalid address: %s", flagAddress)
-		os.Exit(1)
-	}
-	s.Address = serverAddress
-	s.Port = serverPort
-	if err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-	addr := fmt.Sprintf("%s:%d", s.Address, s.Port)
-	fmt.Println("server running on:", addr)
-	err = router.Run(addr)
+	// Создаем экземпляр сервера
+	s := Init(flagAddress)
 
+	// Запускаем сервер
+	err := Run(s, router)
 	if err != nil {
 		panic(err)
 	}
+}
+
+func Run(s server.Server, r *gin.Engine) error {
+	addr := fmt.Sprintf("%s:%d", s.Address, s.Port)
+	fmt.Printf("server running on: %s", addr)
+	err := r.Run(addr)
+	return err
+
+}
+
+func Init(flags string) server.Server {
+	splitedAddress := strings.Split(flags, ":")
+	if len(splitedAddress) != 2 {
+		fmt.Printf("invalid address %s, expected host:port", flags)
+		os.Exit(1)
+	}
+
+	serverAddress := splitedAddress[0]
+	serverPort, err := strconv.ParseInt(splitedAddress[1], 10, 64)
+	if err != nil {
+		fmt.Printf("invalid port: %s", splitedAddress[1])
+		os.Exit(1)
+	}
+
+	s := server.NewServer()
+	s.Address = serverAddress
+	s.Port = serverPort
+	return *s
 }

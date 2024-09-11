@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path"
+	"strconv"
 	"time"
 
 	"github.com/FollowLille/metrics/internal/config"
@@ -82,19 +84,20 @@ func (a *Agent) SendMetrics() error {
 		metricType := "gauge"
 		if name == "PollCount" {
 			metricType = "counter"
+		}
 
-			addr := fmt.Sprintf("http://%s:%d/update/%s/%s/%f", a.ServerAddress, a.ServerPort, metricType, name, value)
-			resp, err := http.Post(addr, config.ContentType, nil)
-			if err != nil {
-				return err
-			}
-			if err := resp.Body.Close(); err != nil {
-				return err
-			}
+		fullPath := path.Join("update", metricType, name, strconv.FormatFloat(value, 'f', -1, 64))
+		addr := fmt.Sprintf("http://%s:%d/%s", a.ServerAddress, a.ServerPort, fullPath)
+		resp, err := http.Post(addr, config.ContentType, nil)
+		if err != nil {
+			return err
+		}
+		if err := resp.Body.Close(); err != nil {
+			return err
+		}
 
-			if resp.StatusCode != 200 {
-				return fmt.Errorf("invalid status code: %d", resp.StatusCode)
-			}
+		if resp.StatusCode != config.StatusOk {
+			return fmt.Errorf("invalid status code: %d", resp.StatusCode)
 		}
 	}
 	return nil
