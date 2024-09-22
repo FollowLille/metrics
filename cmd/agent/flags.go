@@ -41,5 +41,8 @@ func parseFlags() error {
 		}
 		flagPollInterval = interval
 	}
+	fmt.Println("Flags:", flagAddress, flagReportInterval, flagPollInterval)
+	fmt.Println("Address: ", os.Getenv("ADDRESS"))
 	return nil
+
 }
