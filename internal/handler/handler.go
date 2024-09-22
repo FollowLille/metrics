@@ -111,6 +111,7 @@ func UpdateByJSON(c *gin.Context, storage *storage.MemStorage) {
 	var metric metrics.Metrics
 
 	if err := c.BindJSON(&metric); err != nil {
+		logger.Log.Error("failed to bind JSON", zap.Error(err))
 		c.String(config.StatusBadRequest, "invalid json")
 		return
 	}
@@ -156,6 +157,7 @@ func GetValueByBodyHandler(c *gin.Context, storage *storage.MemStorage) {
 func GetValueByJSON(c *gin.Context, storage *storage.MemStorage) {
 	var metric metrics.Metrics
 	if err := c.BindJSON(&metric); err != nil {
+		logger.Log.Error("failed to bind JSON", zap.Error(err))
 		c.String(config.StatusBadRequest, "invalid json")
 		return
 	}
