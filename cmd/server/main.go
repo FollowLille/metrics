@@ -41,9 +41,17 @@ func main() {
 		handler.UpdateHandler(c, metricsStorage)
 	})
 
+	router.POST("/update", func(c *gin.Context) {
+		handler.UpdateByBodyHandler(c, metricsStorage)
+	})
+
 	// Обработчик получения метрик
 	router.GET("/value/:type/:name", func(c *gin.Context) {
 		handler.GetValueHandler(c, metricsStorage)
+	})
+
+	router.POST("/value", func(c *gin.Context) {
+		handler.GetValueByBodyHandler(c, metricsStorage)
 	})
 
 	// Создаем экземпляр сервера

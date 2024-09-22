@@ -1,11 +1,11 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
-	"path"
-	"strconv"
+	"strings"
 	"time"
 
 	"github.com/FollowLille/metrics/internal/config"
@@ -81,14 +81,26 @@ func (a *Agent) GetMetrics() {
 
 func (a *Agent) SendMetrics() error {
 	for name, value := range a.metrics {
-		metricType := "gauge"
+		var metric metrics.Metrics
+
 		if name == "PollCount" {
-			metricType = "counter"
+			metric.MType = "counter"
+			metric.ID = name
+			delta := int64(value)
+			metric.Delta = &delta
+		} else {
+			metric.MType = "gauge"
+			metric.ID = name
+			metric.Value = &value
 		}
 
-		fullPath := path.Join("update", metricType, name, strconv.FormatFloat(value, 'f', -1, 64))
-		addr := fmt.Sprintf("http://%s:%d/%s", a.ServerAddress, a.ServerPort, fullPath)
-		resp, err := http.Post(addr, config.ContentType, nil)
+		jsonMetrics, err := json.Marshal(metric)
+		if err != nil {
+			return err
+		}
+
+		addr := fmt.Sprintf("http://%s:%d/update", a.ServerAddress, a.ServerPort)
+		resp, err := http.Post(addr, "application/json", strings.NewReader(string(jsonMetrics)))
 		if err != nil {
 			return err
 		}

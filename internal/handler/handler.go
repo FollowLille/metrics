@@ -2,11 +2,14 @@ package handler
 
 import (
 	"fmt"
+	"go.uber.org/zap"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/FollowLille/metrics/internal/config"
+	"github.com/FollowLille/metrics/internal/logger"
+	"github.com/FollowLille/metrics/internal/metrics"
 	"github.com/FollowLille/metrics/internal/storage"
 )
 
@@ -91,6 +94,94 @@ func GetValueHandler(c *gin.Context, storage *storage.MemStorage) {
 		}
 		formattedValue := strconv.FormatFloat(value, 'g', -1, 64)
 		c.String(config.StatusOk, formattedValue)
+	default:
+		c.String(config.StatusBadRequest, "invalid metric type, must be counter or gauge")
+	}
+}
+
+func UpdateByBodyHandler(c *gin.Context, storage *storage.MemStorage) {
+	if c.GetHeader("Content-Type") == "application/json" {
+		UpdateByJSON(c, storage)
+	} else {
+		c.String(config.StatusBadRequest, "invalid content type")
+	}
+
+}
+func UpdateByJSON(c *gin.Context, storage *storage.MemStorage) {
+	var metric metrics.Metrics
+
+	if err := c.BindJSON(&metric); err != nil {
+		c.String(config.StatusBadRequest, "invalid json")
+		return
+	}
+
+	switch metric.MType {
+	case "counter":
+		name, value := metric.ID, metric.Delta
+		if value == nil {
+			c.String(config.StatusBadRequest, "counter value is empty")
+			return
+		}
+		storage.UpdateCounter(name, *value)
+		newValue, _ := storage.GetCounter(name)
+		metric.Delta = &newValue
+		c.Header("Content-Type", "application/json")
+		c.JSON(config.StatusOk, metric)
+		logger.Log.Info("counter updated", zap.String("counter_name", name), zap.Int64("counter_value", *value))
+	case "gauge":
+		name, value := metric.ID, metric.Value
+		if value == nil {
+			c.String(config.StatusBadRequest, "gauge value is empty")
+			return
+		}
+		storage.UpdateGauge(name, *value)
+		newValue, _ := storage.GetGauge(name)
+		metric.Value = &newValue
+		c.Header("Content-Type", "application/json")
+		c.JSON(config.StatusOk, metric)
+		logger.Log.Info("gauge updated", zap.String("gauge_name", name), zap.Float64("gauge_value", *value))
+	default:
+		c.String(config.StatusBadRequest, "invalid metric type, must be counter or gauge")
+	}
+}
+
+func GetValueByBodyHandler(c *gin.Context, storage *storage.MemStorage) {
+	if c.GetHeader("Content-Type") == "application/json" {
+		GetValueByJSON(c, storage)
+	} else {
+		c.String(config.StatusBadRequest, "invalid content type")
+	}
+}
+
+func GetValueByJSON(c *gin.Context, storage *storage.MemStorage) {
+	var metric metrics.Metrics
+	if err := c.BindJSON(&metric); err != nil {
+		c.String(config.StatusBadRequest, "invalid json")
+		return
+	}
+	switch metric.MType {
+	case "counter":
+		name := metric.ID
+		value, exists := storage.GetCounter(name)
+		if !exists {
+			c.String(config.StatusNotFound, "counter with name "+name+" not found")
+			return
+		}
+		metric.Delta = &value
+		c.Header("Content-Type", "application/json")
+		c.JSON(config.StatusOk, metric)
+		logger.Log.Info("counter value", zap.String("counter_name", name), zap.Int64("counter_value", value))
+	case "gauge":
+		name := metric.ID
+		value, exists := storage.GetGauge(name)
+		if !exists {
+			c.String(config.StatusNotFound, "gauge with name "+name+" not found")
+			return
+		}
+		metric.Value = &value
+		c.Header("Content-Type", "application/json")
+		c.JSON(config.StatusOk, metric)
+		logger.Log.Info("gauge value", zap.String("gauge_name", name), zap.Float64("gauge_value", value))
 	default:
 		c.String(config.StatusBadRequest, "invalid metric type, must be counter or gauge")
 	}
