@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"io"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -30,10 +31,18 @@ func RequestLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 
+		bodyBytes, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			Log.Error("failed to read request body", zap.Error(err))
+			c.Next() // передаем обработку дальше
+			return
+		}
+
 		Log.Info("got incoming HTTP request",
 			zap.String("method", c.Request.Method),
 			zap.String("path", c.Request.URL.Path),
 			zap.Duration("duration", time.Since(start)),
+			zap.ByteString("body", bodyBytes),
 		)
 		c.Next()
 	}
