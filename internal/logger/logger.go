@@ -38,11 +38,18 @@ func RequestLogger() gin.HandlerFunc {
 			return
 		}
 
+		headers := c.Request.Header
+		headerMap := make(map[string]string)
+		for key, values := range headers {
+			headerMap[key] = values[0] // Логируем первый элемент (если несколько значений)
+		}
+
 		Log.Info("got incoming HTTP request",
 			zap.String("method", c.Request.Method),
 			zap.String("path", c.Request.URL.Path),
 			zap.Duration("duration", time.Since(start)),
 			zap.ByteString("body", bodyBytes),
+			zap.Any("headers", headerMap),
 		)
 		c.Next()
 	}
