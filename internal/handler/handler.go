@@ -159,9 +159,9 @@ func GetValueByJSON(c *gin.Context, storage *storage.MemStorage) {
 		c.String(config.StatusBadRequest, "invalid json")
 		return
 	}
+	name := metric.ID
 	switch metric.MType {
 	case "counter":
-		name := metric.ID
 		value, exists := storage.GetCounter(name)
 		if !exists {
 			c.String(config.StatusNotFound, "counter with name "+name+" not found")
@@ -184,5 +184,6 @@ func GetValueByJSON(c *gin.Context, storage *storage.MemStorage) {
 		logger.Log.Info("gauge value", zap.String("gauge_name", name), zap.Float64("gauge_value", value))
 	default:
 		c.String(config.StatusBadRequest, "invalid metric type, must be counter or gauge")
+		logger.Log.Info("invalid metric type", zap.String("metric_type", metric.MType))
 	}
 }

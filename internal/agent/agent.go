@@ -1,14 +1,17 @@
 package agent
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"go.uber.org/zap"
+	"io"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/FollowLille/metrics/internal/config"
+	"github.com/FollowLille/metrics/internal/logger"
 	"github.com/FollowLille/metrics/internal/metrics"
 )
 
@@ -100,15 +103,16 @@ func (a *Agent) SendMetrics() error {
 		}
 
 		addr := fmt.Sprintf("http://%s:%d/update", a.ServerAddress, a.ServerPort)
-		resp, err := http.Post(addr, "application/json", strings.NewReader(string(jsonMetrics)))
+		resp, err := http.Post(addr, "application/json", bytes.NewReader(jsonMetrics))
 		if err != nil {
 			return err
 		}
-		if err := resp.Body.Close(); err != nil {
-			return err
-		}
+
+		defer resp.Body.Close()
 
 		if resp.StatusCode != config.StatusOk {
+			body, _ := io.ReadAll(resp.Body)
+			logger.Log.Error("invalid status code", zap.Int("status_code", resp.StatusCode), zap.String("body", string(body)))
 			return fmt.Errorf("invalid status code: %d", resp.StatusCode)
 		}
 	}
