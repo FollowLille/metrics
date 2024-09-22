@@ -41,7 +41,7 @@ func main() {
 		handler.UpdateHandler(c, metricsStorage)
 	})
 
-	router.POST("/update", func(c *gin.Context) {
+	router.POST("/update/", func(c *gin.Context) {
 		handler.UpdateByBodyHandler(c, metricsStorage)
 	})
 
@@ -50,7 +50,7 @@ func main() {
 		handler.GetValueHandler(c, metricsStorage)
 	})
 
-	router.POST("/value", func(c *gin.Context) {
+	router.POST("/value/", func(c *gin.Context) {
 		handler.GetValueByBodyHandler(c, metricsStorage)
 	})
 
