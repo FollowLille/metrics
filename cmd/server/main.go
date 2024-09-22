@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/FollowLille/metrics/internal/handler"
+	"github.com/FollowLille/metrics/internal/logger"
 	"github.com/FollowLille/metrics/internal/server"
 	"github.com/FollowLille/metrics/internal/storage"
 )
@@ -18,7 +19,17 @@ func main() {
 	parseFlags()
 	metricsStorage := storage.NewMemStorage()
 
-	router := gin.Default()
+	// Инициализация логгера
+	if err := logger.Initialize(flagLevel); err != nil {
+		fmt.Printf("invalid log level: %s", flagLevel)
+		os.Exit(1)
+	}
+	// Инициализация роутера с восстановлением
+	router := gin.New()
+	router.Use(gin.Recovery())
+
+	// Инициализация обработчиков
+	router.Use(logger.RequestLogger()).Use(logger.ResponseLogger())
 
 	// Обработчик стартовой страницы
 	router.GET("/", func(context *gin.Context) {
@@ -36,7 +47,7 @@ func main() {
 	})
 
 	// Создаем экземпляр сервера
-	s := Init(flagAddress)
+	s := Initialize(flagAddress)
 
 	// Запускаем сервер
 	err := Run(s, router)
@@ -53,7 +64,7 @@ func Run(s server.Server, r *gin.Engine) error {
 
 }
 
-func Init(flags string) server.Server {
+func Initialize(flags string) server.Server {
 	splitedAddress := strings.Split(flags, ":")
 	if len(splitedAddress) != 2 {
 		fmt.Printf("invalid address %s, expected host:port", flags)
@@ -67,6 +78,10 @@ func Init(flags string) server.Server {
 		os.Exit(1)
 	}
 
+	if err := logger.Initialize(flagLevel); err != nil {
+		fmt.Printf("invalid log level: %s", flagLevel)
+		os.Exit(1)
+	}
 	s := server.NewServer()
 	s.Address = serverAddress
 	s.Port = serverPort
