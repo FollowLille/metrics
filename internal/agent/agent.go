@@ -99,7 +99,7 @@ func (a *Agent) SendMetrics() error {
 			return err
 		}
 
-		addr := fmt.Sprintf("http://%s:%d/update/", a.ServerAddress, a.ServerPort)
+		addr := fmt.Sprintf("http://%s:%d/update", a.ServerAddress, a.ServerPort)
 		resp, err := http.Post(addr, "application/json", strings.NewReader(string(jsonMetrics)))
 		if err != nil {
 			return err
