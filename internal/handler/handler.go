@@ -100,7 +100,7 @@ func GetValueHandler(c *gin.Context, storage *storage.MemStorage) {
 }
 
 func UpdateByBodyHandler(c *gin.Context, storage *storage.MemStorage) {
-	if c.GetHeader("Content-Type") == "application/json" {
+	if c.ContentType() == "application/json" {
 		UpdateByJSON(c, storage)
 	} else {
 		c.String(config.StatusBadRequest, "invalid content type")
@@ -147,7 +147,7 @@ func UpdateByJSON(c *gin.Context, storage *storage.MemStorage) {
 }
 
 func GetValueByBodyHandler(c *gin.Context, storage *storage.MemStorage) {
-	if c.GetHeader("Content-Type") == "application/json" {
+	if c.ContentType() == "application/json" {
 		GetValueByJSON(c, storage)
 	} else {
 		c.String(config.StatusBadRequest, "invalid content type")
