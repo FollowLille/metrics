@@ -15,7 +15,7 @@ var flagPollInterval int64
 
 func parseFlags() error {
 	pflag.StringVarP(&flagAddress, "address", "a", "localhost:8080", "address")
-	pflag.Int64VarP(&flagReportInterval, "report-interval", "r", 10, "report interval")
+	pflag.Int64VarP(&flagReportInterval, "report-interval", "r", 20, "report interval")
 	pflag.Int64VarP(&flagPollInterval, "poll-interval", "p", 2, "poll interval")
 	pflag.Parse()
 	if len(pflag.Args()) > 0 {

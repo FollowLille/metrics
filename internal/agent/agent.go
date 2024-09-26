@@ -110,7 +110,7 @@ func (a *Agent) SendMetrics() error {
 		addr := fmt.Sprintf("http://%s:%d/update", a.ServerAddress, a.ServerPort)
 		logger.Log.Info("sending metric", zap.String("url", addr), zap.ByteString("jsonMetrics", jsonMetrics))
 
-		resp, err := http.Post(addr, "application/json", io.NopCloser(bytes.NewBuffer(jsonMetrics)))
+		resp, err := http.Post(addr, "application/json", bytes.NewReader(jsonMetrics))
 		fmt.Println("error is: ", err)
 		if err != nil {
 			logger.Log.Error("failed to send metrics", zap.String("url", addr), zap.Error(err))
