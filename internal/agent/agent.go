@@ -111,11 +111,13 @@ func (a *Agent) SendMetrics() error {
 		logger.Log.Info("sending metric", zap.String("url", addr), zap.ByteString("jsonMetrics", jsonMetrics))
 
 		resp, err := http.Post(addr, "application/json", io.NopCloser(bytes.NewBuffer(jsonMetrics)))
+		fmt.Println("error is: ", err)
 		if err != nil {
 			logger.Log.Error("failed to send metrics", zap.String("url", addr), zap.Error(err))
 			fmt.Println("failed to send metrics", err)
 		} else {
 			defer resp.Body.Close()
+			fmt.Println("status code: ", resp.StatusCode)
 			if resp.StatusCode != config.StatusOk {
 				body, _ := io.ReadAll(resp.Body)
 				logger.Log.Error("invalid status code", zap.Int("status_code", resp.StatusCode), zap.String("body", string(body)))
