@@ -83,7 +83,9 @@ func (a *Agent) GetMetrics() {
 }
 
 func (a *Agent) SendMetrics() error {
+	fmt.Println(a.metrics)
 	for name, value := range a.metrics {
+		fmt.Println(name, value)
 		var metric metrics.Metrics
 
 		if name == "PollCount" {
