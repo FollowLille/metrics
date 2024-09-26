@@ -137,6 +137,7 @@ func (a *Agent) Run() {
 			a.GetMetrics()
 			fmt.Println(a.metrics)
 		case <-reportTicker.C:
+			fmt.Println("Sending metrics")
 			err := a.SendMetrics()
 			if err != nil {
 				panic(err)
