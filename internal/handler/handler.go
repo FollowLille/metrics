@@ -112,6 +112,7 @@ func UpdateByJSON(c *gin.Context, storage *storage.MemStorage) {
 
 	if err := c.BindJSON(&metric); err != nil {
 		logger.Log.Error("failed to bind JSON", zap.Error(err))
+		c.Header("Content-Type", "application/json")
 		c.String(config.StatusBadRequest, "invalid json")
 		return
 	}
@@ -120,6 +121,7 @@ func UpdateByJSON(c *gin.Context, storage *storage.MemStorage) {
 	case "counter":
 		name, value := metric.ID, metric.Delta
 		if value == nil {
+			c.Header("Content-Type", "application/json")
 			c.String(config.StatusBadRequest, "counter value is empty")
 			return
 		}
@@ -142,6 +144,8 @@ func UpdateByJSON(c *gin.Context, storage *storage.MemStorage) {
 		c.JSON(config.StatusOk, metric)
 		logger.Log.Info("gauge updated", zap.String("gauge_name", name), zap.Float64("gauge_value", *value))
 	default:
+
+		c.Header("Content-Type", "application/json")
 		c.String(config.StatusBadRequest, "invalid metric type, must be counter or gauge")
 	}
 }
@@ -158,6 +162,7 @@ func GetValueByJSON(c *gin.Context, storage *storage.MemStorage) {
 	var metric metrics.Metrics
 	if err := c.BindJSON(&metric); err != nil {
 		logger.Log.Error("failed to bind JSON", zap.Error(err))
+		c.Header("Content-Type", "application/json")
 		c.String(config.StatusBadRequest, "invalid json")
 		return
 	}
@@ -166,6 +171,7 @@ func GetValueByJSON(c *gin.Context, storage *storage.MemStorage) {
 	case "counter":
 		value, exists := storage.GetCounter(name)
 		if !exists {
+			c.Header("Content-Type", "application/json")
 			c.String(config.StatusNotFound, "counter with name "+name+" not found")
 			return
 		}
