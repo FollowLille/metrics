@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"bytes"
 	"io"
 	"time"
 
@@ -51,6 +52,8 @@ func RequestLogger() gin.HandlerFunc {
 			zap.ByteString("body", bodyBytes),
 			zap.Any("headers", headerMap),
 		)
+
+		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 		c.Next()
 	}
 }

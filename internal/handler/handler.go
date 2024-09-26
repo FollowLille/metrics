@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"bytes"
 	"fmt"
 	"go.uber.org/zap"
+	"io"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -105,14 +107,26 @@ func UpdateByBodyHandler(c *gin.Context, storage *storage.MemStorage) {
 	} else {
 		c.String(config.StatusBadRequest, "invalid content type")
 	}
-
 }
+
 func UpdateByJSON(c *gin.Context, storage *storage.MemStorage) {
 	var metric metrics.Metrics
 
+	c.Header("Content-Type", "application/json")
+
+	// Сохраняем тело запроса для дальнейшего использования
+	bodyBytes, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		logger.Log.Error("failed to read request body", zap.Error(err))
+		c.String(config.StatusBadRequest, "failed to read request body")
+		return
+	}
+
+	// Восстанавливаем тело запроса для дальнейшего использования
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
 	if err := c.BindJSON(&metric); err != nil {
 		logger.Log.Error("failed to bind JSON", zap.Error(err))
-		c.Header("Content-Type", "application/json")
 		c.String(config.StatusBadRequest, "invalid json")
 		return
 	}
@@ -121,14 +135,12 @@ func UpdateByJSON(c *gin.Context, storage *storage.MemStorage) {
 	case "counter":
 		name, value := metric.ID, metric.Delta
 		if value == nil {
-			c.Header("Content-Type", "application/json")
 			c.String(config.StatusBadRequest, "counter value is empty")
 			return
 		}
 		storage.UpdateCounter(name, *value)
 		newValue, _ := storage.GetCounter(name)
 		metric.Delta = &newValue
-		c.Header("Content-Type", "application/json")
 		c.JSON(config.StatusOk, metric)
 		logger.Log.Info("counter updated", zap.String("counter_name", name), zap.Int64("counter_value", *value))
 	case "gauge":
@@ -140,12 +152,9 @@ func UpdateByJSON(c *gin.Context, storage *storage.MemStorage) {
 		storage.UpdateGauge(name, *value)
 		newValue, _ := storage.GetGauge(name)
 		metric.Value = &newValue
-		c.Header("Content-Type", "application/json")
 		c.JSON(config.StatusOk, metric)
 		logger.Log.Info("gauge updated", zap.String("gauge_name", name), zap.Float64("gauge_value", *value))
 	default:
-
-		c.Header("Content-Type", "application/json")
 		c.String(config.StatusBadRequest, "invalid metric type, must be counter or gauge")
 	}
 }
@@ -160,23 +169,36 @@ func GetValueByBodyHandler(c *gin.Context, storage *storage.MemStorage) {
 
 func GetValueByJSON(c *gin.Context, storage *storage.MemStorage) {
 	var metric metrics.Metrics
+
+	c.Header("Content-Type", "application/json")
+
+	// Сохраняем тело запроса для дальнейшего использования
+	bodyBytes, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		logger.Log.Error("failed to read request body", zap.Error(err))
+		c.String(config.StatusBadRequest, "failed to read request body")
+		return
+	}
+
+	// Восстанавливаем тело запроса для дальнейшего использования
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
 	if err := c.BindJSON(&metric); err != nil {
 		logger.Log.Error("failed to bind JSON", zap.Error(err))
 		c.Header("Content-Type", "application/json")
 		c.String(config.StatusBadRequest, "invalid json")
 		return
 	}
+
 	name := metric.ID
 	switch metric.MType {
 	case "counter":
 		value, exists := storage.GetCounter(name)
 		if !exists {
-			c.Header("Content-Type", "application/json")
 			c.String(config.StatusNotFound, "counter with name "+name+" not found")
 			return
 		}
 		metric.Delta = &value
-		c.Header("Content-Type", "application/json")
 		c.JSON(config.StatusOk, metric)
 		logger.Log.Info("counter value", zap.String("counter_name", name), zap.Int64("counter_value", value))
 	case "gauge":
@@ -187,7 +209,6 @@ func GetValueByJSON(c *gin.Context, storage *storage.MemStorage) {
 			return
 		}
 		metric.Value = &value
-		c.Header("Content-Type", "application/json")
 		c.JSON(config.StatusOk, metric)
 		logger.Log.Info("gauge value", zap.String("gauge_name", name), zap.Float64("gauge_value", value))
 	default:
