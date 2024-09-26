@@ -97,14 +97,21 @@ func (a *Agent) SendMetrics() error {
 			metric.Value = &value
 		}
 
+		logger.Log.Info("preparing to use metric", zap.Any("metric", metric))
+
 		jsonMetrics, err := json.Marshal(metric)
 		if err != nil {
+			logger.Log.Error("failed to marshal metric", zap.String("metric", fmt.Sprintf("%+v", metric)), zap.Error(err))
 			return err
 		}
 
 		addr := fmt.Sprintf("http://%s:%d/update", a.ServerAddress, a.ServerPort)
+
+		logger.Log.Info("sending metric", zap.String("url", addr), zap.ByteString("jsonMetrics", jsonMetrics))
+
 		resp, err := http.Post(addr, "application/json", bytes.NewReader(jsonMetrics))
 		if err != nil {
+			logger.Log.Error("failed to send metrics", zap.String("url", addr), zap.Error(err))
 			return err
 		}
 
@@ -120,7 +127,7 @@ func (a *Agent) SendMetrics() error {
 }
 
 func (a *Agent) Run() {
-	fmt.Println("agent started")
+	fmt.Printf("agent started to work with http://%s:%d/update", a.ServerAddress, a.ServerPort)
 	pollTicker := time.NewTicker(a.PollInterval)
 	reportTicker := time.NewTicker(a.ReportSendInterval)
 
