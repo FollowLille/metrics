@@ -114,14 +114,13 @@ func (a *Agent) SendMetrics() error {
 		if err != nil {
 			logger.Log.Error("failed to send metrics", zap.String("url", addr), zap.Error(err))
 			fmt.Println("failed to send metrics", err)
-		}
-
-		defer resp.Body.Close()
-
-		if resp.StatusCode != config.StatusOk {
-			body, _ := io.ReadAll(resp.Body)
-			logger.Log.Error("invalid status code", zap.Int("status_code", resp.StatusCode), zap.String("body", string(body)))
-			return fmt.Errorf("invalid status code: %d", resp.StatusCode)
+		} else {
+			defer resp.Body.Close()
+			if resp.StatusCode != config.StatusOk {
+				body, _ := io.ReadAll(resp.Body)
+				logger.Log.Error("invalid status code", zap.Int("status_code", resp.StatusCode), zap.String("body", string(body)))
+				return fmt.Errorf("invalid status code: %d", resp.StatusCode)
+			}
 		}
 	}
 	return nil
