@@ -111,7 +111,7 @@ func UpdateByBodyHandler(c *gin.Context, storage *storage.MemStorage) {
 
 func UpdateByJSON(c *gin.Context, storage *storage.MemStorage) {
 	var metric metrics.Metrics
-
+	fmt.Println("update by JSON")
 	c.Header("Content-Type", "application/json")
 
 	// Сохраняем тело запроса для дальнейшего использования
@@ -125,12 +125,12 @@ func UpdateByJSON(c *gin.Context, storage *storage.MemStorage) {
 	// Восстанавливаем тело запроса для дальнейшего использования
 	c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
-	if err := c.BindJSON(&metric); err != nil {
+	if err := c.ShouldBindJSON(&metric); err != nil {
 		logger.Log.Error("failed to bind JSON", zap.Error(err))
 		c.String(config.StatusBadRequest, "invalid json")
 		return
 	}
-
+	fmt.Println("Received metric: ", metric)
 	switch metric.MType {
 	case "counter":
 		name, value := metric.ID, metric.Delta
