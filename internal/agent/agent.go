@@ -99,21 +99,24 @@ func (a *Agent) SendMetrics() error {
 			value := float64(value)
 			metric.Value = &value
 		}
-		fmt.Println("preparing to use metric")
+		fmt.Println("metric is ", metric)
 		logger.Log.Info("preparing to use metric", zap.Any("metric", metric))
 
 		jsonMetrics, err := json.Marshal(metric)
+		fmt.Println("jsonMetrics is ", jsonMetrics)
 		if err != nil {
+			fmt.Println("failed to marshal metric")
 			logger.Log.Error("failed to marshal metric", zap.String("metric", fmt.Sprintf("%+v", metric)), zap.Error(err))
 			return err
 		}
 
 		addr := fmt.Sprintf("http://%s:%d/update", a.ServerAddress, a.ServerPort)
-
+		fmt.Println("address is ", addr)
 		logger.Log.Info("sending metric", zap.String("url", addr), zap.ByteString("jsonMetrics", jsonMetrics))
 
 		resp, err := http.Post(addr, "application/json", bytes.NewReader(jsonMetrics))
 		if err != nil {
+			fmt.Println("failed to send metrics")
 			logger.Log.Error("failed to send metrics", zap.String("url", addr), zap.Error(err))
 			return err
 		}
