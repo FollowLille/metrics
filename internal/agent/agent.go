@@ -96,9 +96,10 @@ func (a *Agent) SendMetrics() error {
 		} else {
 			metric.MType = "gauge"
 			metric.ID = name
+			value := float64(value)
 			metric.Value = &value
 		}
-
+		fmt.Println("preparing to use metric")
 		logger.Log.Info("preparing to use metric", zap.Any("metric", metric))
 
 		jsonMetrics, err := json.Marshal(metric)
