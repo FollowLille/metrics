@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"go.uber.org/zap"
@@ -83,9 +84,7 @@ func (a *Agent) GetMetrics() {
 }
 
 func (a *Agent) SendMetrics() error {
-	fmt.Println(a.metrics)
 	for name, value := range a.metrics {
-		fmt.Println(name, value)
 		var metric metrics.Metrics
 
 		if name == "PollCount" {
@@ -108,16 +107,42 @@ func (a *Agent) SendMetrics() error {
 		}
 
 		addr := fmt.Sprintf("http://%s:%d/update", a.ServerAddress, a.ServerPort)
-		logger.Log.Info("sending metric", zap.String("url", addr), zap.ByteString("jsonMetrics", jsonMetrics))
 
-		resp, err := http.Post(addr, "application/json", bytes.NewReader(jsonMetrics))
-		fmt.Println("error is: ", err)
+		var b bytes.Buffer
+		gz, err := gzip.NewWriterLevel(&b, gzip.BestCompression)
+		if err != nil {
+			logger.Log.Error("failed to create gzip writer", zap.Error(err))
+			return err
+		}
+
+		if _, err := gz.Write(jsonMetrics); err != nil {
+			logger.Log.Error("failed to compress metric", zap.String("metric", fmt.Sprintf("%+v", metric)), zap.Error(err))
+			return err
+		}
+
+		if err := gz.Flush(); err != nil {
+			logger.Log.Error("failed to flush compressed data", zap.Error(err))
+			return err
+		}
+		gz.Close()
+
+		req, err := http.NewRequest("POST", addr, &b)
+		if err != nil {
+			logger.Log.Error("failed to create request", zap.String("url", addr), zap.Error(err))
+			return err
+		}
+
+		req.Header.Set("Content-Encoding", "gzip")
+		req.Header.Set("Accept-Encoding", "gzip")
+		req.Header.Set("Content-Type", "application/json")
+
+		logger.Log.Info("sending metrics", zap.String("url", addr), zap.Any("metric", metric))
+
+		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			logger.Log.Error("failed to send metrics", zap.String("url", addr), zap.Error(err))
-			fmt.Println("failed to send metrics", err)
 		} else {
 			defer resp.Body.Close()
-			fmt.Println("status code: ", resp.StatusCode)
 			if resp.StatusCode != config.StatusOk {
 				body, _ := io.ReadAll(resp.Body)
 				logger.Log.Error("invalid status code", zap.Int("status_code", resp.StatusCode), zap.String("body", string(body)))
@@ -129,7 +154,7 @@ func (a *Agent) SendMetrics() error {
 }
 
 func (a *Agent) Run() {
-	fmt.Printf("agent started to work with http://%s:%d/update", a.ServerAddress, a.ServerPort)
+	logger.Log.Info("agent running")
 	pollTicker := time.NewTicker(a.PollInterval)
 	reportTicker := time.NewTicker(a.ReportSendInterval)
 
@@ -137,9 +162,7 @@ func (a *Agent) Run() {
 		select {
 		case <-pollTicker.C:
 			a.GetMetrics()
-			fmt.Println(a.metrics)
 		case <-reportTicker.C:
-			fmt.Println("Sending metrics")
 			err := a.SendMetrics()
 			if err != nil {
 				panic(err)

@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/FollowLille/metrics/internal/compress"
 	"github.com/FollowLille/metrics/internal/handler"
 	"github.com/FollowLille/metrics/internal/logger"
 	"github.com/FollowLille/metrics/internal/server"
@@ -30,6 +31,9 @@ func main() {
 
 	// Инициализация обработчиков
 	router.Use(logger.RequestLogger()).Use(logger.ResponseLogger())
+
+	// Инициализация сжатия
+	router.Use(compress.GzipMiddleware(), compress.GzipResponseMiddleware())
 
 	// Обработчик стартовой страницы
 	router.GET("/", func(context *gin.Context) {
