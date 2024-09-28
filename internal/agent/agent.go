@@ -133,7 +133,6 @@ func (a *Agent) SendMetrics() error {
 		}
 
 		req.Header.Set("Content-Encoding", "gzip")
-		req.Header.Set("Accept-Encoding", "gzip")
 		req.Header.Set("Content-Type", "application/json")
 
 		logger.Log.Info("sending metrics", zap.String("url", addr), zap.Any("metric", metric))
