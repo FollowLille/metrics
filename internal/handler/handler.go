@@ -3,9 +3,11 @@ package handler
 import (
 	"bytes"
 	"fmt"
+	"github.com/FollowLille/metrics/internal/compress"
 	"go.uber.org/zap"
 	"io"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -37,6 +39,13 @@ func HomeHandler(c *gin.Context, s *storage.MemStorage) {
 	html += "</ul>"
 
 	html += "</body></html>"
+
+	if strings.Contains(c.GetHeader("Accept-Encoding"), "gzip") {
+		c.Header("Content-Encoding", "gzip")
+		gz := compress.NewCompressWriter(c.Writer)
+		defer gz.Close()
+		c.Writer = gz
+	}
 
 	// Отправка HTML-страницы в ответе
 	c.Data(config.StatusOk, "text/html; charset=utf-8", []byte(html))

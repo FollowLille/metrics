@@ -22,7 +22,7 @@ type compressWriter struct {
 	zw *gzip.Writer
 }
 
-func newCompressWriter(w gin.ResponseWriter) *compressWriter {
+func NewCompressWriter(w gin.ResponseWriter) *compressWriter {
 	return &compressWriter{
 		ResponseWriter: w,
 		zw:             gzip.NewWriter(w),
@@ -111,7 +111,7 @@ func GzipResponseMiddleware() gin.HandlerFunc {
 			fmt.Println("content type: ", contentType)
 			if strings.Contains(contentType, "text/html") || strings.Contains(contentType, "application/json") {
 				c.Header("Content-Encoding", "gzip")
-				gz := newCompressWriter(w)
+				gz := NewCompressWriter(w)
 				defer gz.Close()
 				c.Writer = gz
 			}
