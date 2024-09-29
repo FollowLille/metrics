@@ -103,7 +103,6 @@ func GzipMiddleware() gin.HandlerFunc {
 
 func GzipResponseMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Next()
 
 		if strings.Contains(c.GetHeader("Accept-Encoding"), "gzip") {
 			contentType := c.Writer.Header().Get("Content-Type")
@@ -114,5 +113,6 @@ func GzipResponseMiddleware() gin.HandlerFunc {
 				c.Writer = gz
 			}
 		}
+		c.Next()
 	}
 }
