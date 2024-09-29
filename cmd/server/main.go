@@ -82,15 +82,20 @@ func Run(s server.Server, r *gin.Engine, str *storage.MemStorage) error {
 		return err
 	}
 
-	if flagRestore {
-		file, err = os.OpenFile(flagFilePath+"/metrics.log", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
-	} else {
-		file, err = os.OpenFile(flagFilePath+"/metrics.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	}
+	file, err = os.OpenFile(flagFilePath+"/metrics.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		fmt.Printf("can't open file: %s", flagFilePath)
 		logger.Log.Error("can't open file", zap.Error(err))
 		return err
+	}
+
+	defer file.Close()
+	if flagRestore {
+		err = str.LoadMetricsFromFile(file)
+		if err != nil {
+			logger.Log.Error("can't load metrics from file", zap.Error(err))
+			return err
+		}
 	}
 	defer file.Close()
 
@@ -102,9 +107,8 @@ func Run(s server.Server, r *gin.Engine, str *storage.MemStorage) error {
 		for {
 			select {
 			case <-ticker.C:
-				err := s.SaveMetricsToFile(str, file)
+				err := str.SaveMetricsToFile(file)
 				if err != nil {
-					fmt.Printf("can't save metrics to file: %s", flagFilePath)
 					logger.Log.Error("can't save metrics to file", zap.Error(err))
 				}
 			case <-stopChan:

@@ -8,19 +8,20 @@ import (
 )
 
 var (
+	flagStoreInterval int64
 	flagAddress       string
 	flagLevel         string
-	flagStoreInterval int64
 	flagFilePath      string
+	flagRestoreStr    string
 	flagRestore       bool
 )
 
 func parseFlags() {
+	pflag.Int64VarP(&flagStoreInterval, "store-interval", "i", 300, "store interval")
 	pflag.StringVarP(&flagAddress, "address", "a", "localhost:8080", "address")
 	pflag.StringVarP(&flagLevel, "level", "l", "info", "log level")
-	pflag.Int64VarP(&flagStoreInterval, "store-interval", "i", 300, "store interval")
 	pflag.StringVarP(&flagFilePath, "file-path", "f", "./metrics", "file path")
-	pflag.BoolVarP(&flagRestore, "restore", "r", true, "restore")
+	pflag.StringVarP(&flagRestoreStr, "restore", "r", "true", "restore")
 
 	pflag.Parse()
 
@@ -45,11 +46,14 @@ func parseFlags() {
 	}
 
 	if envRestore := os.Getenv("RESTORE"); envRestore != "" {
-		restore, err := strconv.ParseBool(envRestore)
-		if err != nil {
-			fmt.Printf("invalid restore value: %s", envRestore)
-		}
-		flagRestore = restore
+		flagRestoreStr = envRestore
+	}
+
+	var err error
+	flagRestore, err = strconv.ParseBool(flagRestoreStr)
+	if err != nil {
+		fmt.Printf("invalid restore value: %s", flagRestoreStr)
+		os.Exit(1)
 	}
 
 	fmt.Println("Flags:", flagAddress, flagLevel, flagStoreInterval, flagFilePath, flagRestore)
