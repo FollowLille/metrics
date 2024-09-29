@@ -203,6 +203,7 @@ func GetValueByJSON(c *gin.Context, storage *storage.MemStorage) {
 		value, exists := storage.GetCounter(name)
 		if !exists {
 			c.String(config.StatusNotFound, "counter with name "+name+" not found")
+			logger.Log.Info("counter not found", zap.String("counter_name", name))
 			return
 		}
 		metric.Delta = &value
@@ -213,6 +214,7 @@ func GetValueByJSON(c *gin.Context, storage *storage.MemStorage) {
 		value, exists := storage.GetGauge(name)
 		if !exists {
 			c.String(config.StatusNotFound, "gauge with name "+name+" not found")
+			logger.Log.Info("gauge not found", zap.String("gauge_name", name))
 			return
 		}
 		metric.Value = &value
