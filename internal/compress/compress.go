@@ -106,7 +106,7 @@ func GzipResponseMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 
 		if strings.Contains(c.GetHeader("Accept-Encoding"), "gzip") {
-			contentType := c.Writer.Header().Get("Content-Type")
+			contentType := c.GetHeader("Content-Type")
 			fmt.Println("content type: ", contentType)
 			if strings.Contains(contentType, "text/html") || strings.Contains(contentType, "application/json") {
 				c.Header("Content-Encoding", "gzip")
