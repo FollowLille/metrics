@@ -33,7 +33,7 @@ func main() {
 	router.Use(logger.RequestLogger()).Use(logger.ResponseLogger())
 
 	// Инициализация сжатия
-	router.Use(compress.GzipMiddleware(), compress.GzipResponseMiddleware())
+	router.Use(compress.GzipMiddleware()).Use(compress.GzipResponseMiddleware())
 
 	// Обработчик стартовой страницы
 	router.GET("/", func(context *gin.Context) {
