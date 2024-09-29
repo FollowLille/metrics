@@ -2,13 +2,13 @@ package main
 
 import (
 	"fmt"
-	"go.uber.org/zap"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 
 	"github.com/FollowLille/metrics/internal/compress"
 	"github.com/FollowLille/metrics/internal/handler"
@@ -73,50 +73,16 @@ func main() {
 func Run(s server.Server, r *gin.Engine, str *storage.MemStorage) error {
 	addr := fmt.Sprintf("%s:%d", s.Address, s.Port)
 	fmt.Printf("server running on: %s", addr)
-
 	var err error
-	var file *os.File
-
-	if err := os.MkdirAll(flagFilePath, 0755); err != nil {
-		fmt.Printf("can't create directory: %s\n", err)
-		return err
-	}
-
-	file, err = os.OpenFile(flagFilePath+"/metrics.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		fmt.Printf("can't open file: %s", flagFilePath)
-		logger.Log.Error("can't open file", zap.Error(err))
-		return err
-	}
-
-	defer file.Close()
-	if flagRestore {
-		err = str.LoadMetricsFromFile(file)
-		if err != nil {
-			logger.Log.Error("can't load metrics from file", zap.Error(err))
-			return err
-		}
-	}
-	defer file.Close()
-
 	stopChan := make(chan struct{})
 
-	go func() {
-		ticker := time.NewTicker(time.Duration(flagStoreInterval) * time.Second)
+	str, file, err := loadMetricsFromFile(str)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
 
-		for {
-			select {
-			case <-ticker.C:
-				err := str.SaveMetricsToFile(file)
-				if err != nil {
-					logger.Log.Error("can't save metrics to file", zap.Error(err))
-				}
-			case <-stopChan:
-				fmt.Println("stop ticker")
-				return
-			}
-		}
-	}()
+	go runPeriodicSaver(str, file, stopChan)
 
 	err = r.Run(addr)
 	return err
@@ -144,4 +110,44 @@ func Initialize(flags string) server.Server {
 	s.Address = serverAddress
 	s.Port = serverPort
 	return *s
+}
+
+func loadMetricsFromFile(str *storage.MemStorage) (*storage.MemStorage, *os.File, error) {
+	var err error
+	var file *os.File
+
+	if err := os.MkdirAll(flagFilePath, 0755); err != nil {
+		logger.Log.Error("can't create dir", zap.Error(err))
+		return nil, nil, err
+	}
+
+	file, err = os.OpenFile(flagFilePath+"/metrics.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		logger.Log.Error("can't open file", zap.Error(err))
+		return nil, nil, err
+	}
+
+	if flagRestore {
+		err = str.LoadMetricsFromFile(file)
+		if err != nil {
+			logger.Log.Error("can't load metrics from file", zap.Error(err))
+			return nil, nil, err
+		}
+	}
+	return str, file, nil
+}
+
+func runPeriodicSaver(str *storage.MemStorage, file *os.File, stopChan chan struct{}) {
+	ticker := time.NewTicker(time.Duration(flagStoreInterval) * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			if err := str.SaveMetricsToFile(file); err != nil {
+				logger.Log.Error("can't save metrics to file", zap.Error(err))
+			}
+		case <-stopChan:
+			fmt.Println("stop ticker")
+			return
+		}
+	}
 }
