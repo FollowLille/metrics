@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"go.uber.org/zap"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -62,18 +64,48 @@ func main() {
 	s := Initialize(flagAddress)
 
 	// Запускаем сервер
-	err := Run(s, router)
+	err := Run(s, router, metricsStorage)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func Run(s server.Server, r *gin.Engine) error {
+func Run(s server.Server, r *gin.Engine, str *storage.MemStorage) error {
 	addr := fmt.Sprintf("%s:%d", s.Address, s.Port)
 	fmt.Printf("server running on: %s", addr)
-	err := r.Run(addr)
-	return err
 
+	var err error
+	var file *os.File
+
+	if flagRestore {
+		file, err = os.OpenFile(flagFilePath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	} else {
+		file, err = os.OpenFile(flagFilePath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	}
+	if err != nil {
+		fmt.Printf("can't open file: %s", flagFilePath)
+		logger.Log.Error("can't open file", zap.Error(err))
+		return err
+	}
+	defer file.Close()
+
+	go func() {
+		ticker := time.NewTicker(time.Duration(flagStoreInterval) * time.Second)
+
+		for {
+			select {
+			case <-ticker.C:
+				err := s.SaveMetricsToFile(str, file)
+				if err != nil {
+					fmt.Printf("can't save metrics to file: %s", flagFilePath)
+					logger.Log.Error("can't save metrics to file", zap.Error(err))
+				}
+			}
+		}
+	}()
+
+	err = r.Run(addr)
+	return err
 }
 
 func Initialize(flags string) server.Server {

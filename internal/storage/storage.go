@@ -41,3 +41,10 @@ func (s *MemStorage) GetAllGauges() map[string]float64 {
 func (s *MemStorage) GetAllCounters() map[string]int64 {
 	return s.counters
 }
+
+func (s *MemStorage) GetAllMetrics() map[string]interface{} {
+	return map[string]interface{}{
+		"gauges":   s.gauges,
+		"counters": s.counters,
+	}
+}
