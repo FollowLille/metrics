@@ -19,7 +19,7 @@ func parseFlags() {
 	pflag.StringVarP(&flagAddress, "address", "a", "localhost:8080", "address")
 	pflag.StringVarP(&flagLevel, "level", "l", "info", "log level")
 	pflag.Int64VarP(&flagStoreInterval, "store-interval", "i", 300, "store interval")
-	pflag.StringVarP(&flagFilePath, "file-path", "f", "metrics.log", "file path")
+	pflag.StringVarP(&flagFilePath, "file-path", "f", "./metrics", "file path")
 	pflag.BoolVarP(&flagRestore, "restore", "r", true, "restore")
 
 	pflag.Parse()

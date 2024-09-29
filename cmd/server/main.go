@@ -77,10 +77,15 @@ func Run(s server.Server, r *gin.Engine, str *storage.MemStorage) error {
 	var err error
 	var file *os.File
 
+	if err := os.MkdirAll(flagFilePath, 0755); err != nil {
+		fmt.Printf("can't create directory: %s\n", err)
+		return err
+	}
+
 	if flagRestore {
-		file, err = os.OpenFile(flagFilePath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+		file, err = os.OpenFile(flagFilePath+"/metrics.log", os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	} else {
-		file, err = os.OpenFile(flagFilePath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		file, err = os.OpenFile(flagFilePath+"/metrics.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	}
 	if err != nil {
 		fmt.Printf("can't open file: %s", flagFilePath)
@@ -88,6 +93,8 @@ func Run(s server.Server, r *gin.Engine, str *storage.MemStorage) error {
 		return err
 	}
 	defer file.Close()
+
+	stopChan := make(chan struct{})
 
 	go func() {
 		ticker := time.NewTicker(time.Duration(flagStoreInterval) * time.Second)
@@ -100,6 +107,9 @@ func Run(s server.Server, r *gin.Engine, str *storage.MemStorage) error {
 					fmt.Printf("can't save metrics to file: %s", flagFilePath)
 					logger.Log.Error("can't save metrics to file", zap.Error(err))
 				}
+			case <-stopChan:
+				fmt.Println("stop ticker")
+				return
 			}
 		}
 	}()
