@@ -1,11 +1,17 @@
 package compress
 
 import (
+	"bytes"
 	"compress/gzip"
-	"github.com/gin-gonic/gin"
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
+	"github.com/FollowLille/metrics/internal/config"
+	"github.com/FollowLille/metrics/internal/logger"
 )
 
 // compressWriter реализует интерфейс http.ResponseWriter и позволяет прозрачно для сервера
@@ -77,11 +83,19 @@ func GzipMiddleware() gin.HandlerFunc {
 		if strings.Contains(c.GetHeader("Content-Encoding"), "gzip") {
 			gz, err := gzip.NewReader(c.Request.Body)
 			if err != nil {
-				c.AbortWithStatus(http.StatusInternalServerError)
+				c.AbortWithStatus(config.StatusBadRequest)
+				logger.Log.Error("failed to create gzip reader", zap.Error(err))
 				return
 			}
 			defer gz.Close()
-			c.Request.Body = gz
+			body, err := io.ReadAll(gz)
+			if err != nil {
+				c.AbortWithStatus(config.StatusBadRequest)
+				logger.Log.Error("failed to read gzip body", zap.Error(err))
+				return
+			}
+
+			c.Request.Body = io.NopCloser(bytes.NewBuffer(body))
 		}
 		c.Next()
 	}
@@ -89,7 +103,6 @@ func GzipMiddleware() gin.HandlerFunc {
 
 func GzipResponseMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Next()
 		if strings.Contains(c.GetHeader("Accept-Encoding"), "gzip") {
 			contentType := c.Writer.Header().Get("Content-Type")
 			if strings.Contains(contentType, "text/html") || strings.Contains(contentType, "application/json") {
@@ -98,5 +111,6 @@ func GzipResponseMiddleware() gin.HandlerFunc {
 				c.Writer = gz
 			}
 		}
+		c.Next()
 	}
 }
