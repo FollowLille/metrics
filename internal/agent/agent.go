@@ -35,6 +35,24 @@ func NewAgent() *Agent {
 	}
 }
 
+func (a *Agent) Run() {
+	logger.Log.Info("agent running")
+	pollTicker := time.NewTicker(a.PollInterval)
+	reportTicker := time.NewTicker(a.ReportSendInterval)
+
+	for {
+		select {
+		case <-pollTicker.C:
+			a.GetMetrics()
+		case <-reportTicker.C:
+			err := a.SendMetricsByBatch()
+			if err != nil {
+				logger.Log.Error("failed to send metrics", zap.Error(err))
+			}
+		}
+	}
+}
+
 func (a *Agent) ChangeIntervalByName(name string, seconds int64) error {
 	if seconds < 1 {
 		return fmt.Errorf("incorect inverval value: %d, value must be > 0", seconds)
@@ -84,6 +102,7 @@ func (a *Agent) GetMetrics() {
 }
 
 func (a *Agent) SendMetricsByBatch() error {
+	fmt.Println("send metrics by batch")
 	var m []metrics.Metrics
 	for name, value := range a.metrics {
 		var metric metrics.Metrics
@@ -95,41 +114,79 @@ func (a *Agent) SendMetricsByBatch() error {
 		} else {
 			metric.MType = "gauge"
 			metric.ID = name
-			value := float64(value)
 			metric.Value = &value
 		}
 		m = append(m, metric)
 	}
-	logger.Log.Info("preparing to use metrics", zap.Any("metrics", m))
 
+	logger.Log.Info("preparing to use metrics", zap.Any("metrics", m))
 	jsonMetrics, err := json.Marshal(m)
 	if err != nil {
 		logger.Log.Error("failed to marshal metrics", zap.Error(err))
 		return err
 	}
 
+	addr := fmt.Sprintf("http://%s:%d/updates", a.ServerAddress, a.ServerPort)
+	if err := sendCompressedRequest(addr, jsonMetrics); err != nil {
+		logger.Log.Error("failed to send metrics by batch", zap.Error(err))
+		return err
+	}
+
+	logger.Log.Info("metrics sent successfully by batch")
+	return nil
+}
+
+func (a *Agent) SendMetrics() error {
+	for name, value := range a.metrics {
+		var metric metrics.Metrics
+		if name == "PollCount" {
+			metric.MType = "counter"
+			metric.ID = name
+			delta := int64(value)
+			metric.Delta = &delta
+		} else {
+			metric.MType = "gauge"
+			metric.ID = name
+			metric.Value = &value
+		}
+
+		logger.Log.Info("preparing to use metric", zap.Any("metric", metric))
+
+		jsonMetric, err := json.Marshal(metric)
+		if err != nil {
+			logger.Log.Error("failed to marshal metric", zap.String("metric", fmt.Sprintf("%+v", metric)), zap.Error(err))
+			return err
+		}
+
+		addr := fmt.Sprintf("http://%s:%d/update", a.ServerAddress, a.ServerPort)
+		if err := sendCompressedRequest(addr, jsonMetric); err != nil {
+			logger.Log.Error("failed to send metric", zap.String("metric", fmt.Sprintf("%+v", metric)), zap.Error(err))
+			return err
+		}
+
+		logger.Log.Info("metric sent successfully", zap.Any("metric", metric))
+	}
+
+	return nil
+}
+
+func sendCompressedRequest(addr string, jsonData []byte) error {
 	var b bytes.Buffer
 	gz, err := gzip.NewWriterLevel(&b, gzip.BestCompression)
 	if err != nil {
 		logger.Log.Error("failed to create gzip writer", zap.Error(err))
 		return err
 	}
+	defer gz.Close()
 
-	if _, err := gz.Write(jsonMetrics); err != nil {
-		logger.Log.Error("failed to compress metric", zap.Error(err))
+	if _, err := gz.Write(jsonData); err != nil {
+		logger.Log.Error("failed to compress data", zap.Error(err))
 		return err
 	}
 
-	if err := gz.Flush(); err != nil {
-		logger.Log.Error("failed to flush compressed data", zap.Error(err))
-		return err
-	}
-	gz.Close()
-
-	logger.Log.Info("sending metrics", zap.Any("metrics", m))
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s:%d/updates", a.ServerAddress, a.ServerPort), &b)
+	req, err := http.NewRequest(http.MethodPost, addr, &b)
 	if err != nil {
-		logger.Log.Error("failed to create request", zap.Error(err))
+		logger.Log.Error("failed to create request", zap.String("address", addr), zap.Error(err))
 		return err
 	}
 
@@ -138,100 +195,16 @@ func (a *Agent) SendMetricsByBatch() error {
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		logger.Log.Error("failed to send request", zap.Error(err))
+		logger.Log.Error("failed to send request", zap.String("address", addr), zap.Error(err))
 		return err
 	}
 	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
-		logger.Log.Error("failed to send request", zap.Error(err))
-		return err
+		body, _ := io.ReadAll(resp.Body)
+		logger.Log.Error("invalid status code", zap.Int("status_code", resp.StatusCode), zap.String("body", string(body)))
+		return fmt.Errorf("invalid status code: %d", resp.StatusCode)
 	}
-	logger.Log.Info("metrics sent successfully")
+
 	return nil
-
-}
-func (a *Agent) SendMetrics() error {
-	for name, value := range a.metrics {
-		var metric metrics.Metrics
-
-		if name == "PollCount" {
-			metric.MType = metrics.Counter
-			metric.ID = name
-			delta := int64(value)
-			metric.Delta = &delta
-		} else {
-			metric.MType = metrics.Gauge
-			metric.ID = name
-			value := float64(value)
-			metric.Value = &value
-		}
-		logger.Log.Info("preparing to use metric", zap.Any("metric", metric))
-
-		jsonMetrics, err := json.Marshal(metric)
-		if err != nil {
-			logger.Log.Error("failed to marshal metric", zap.String("metric", fmt.Sprintf("%+v", metric)), zap.Error(err))
-			return err
-		}
-
-		addr := fmt.Sprintf("http://%s:%d/update", a.ServerAddress, a.ServerPort)
-
-		var b bytes.Buffer
-		gz, err := gzip.NewWriterLevel(&b, gzip.BestCompression)
-		if err != nil {
-			logger.Log.Error("failed to create gzip writer", zap.Error(err))
-			return err
-		}
-
-		if _, err := gz.Write(jsonMetrics); err != nil {
-			logger.Log.Error("failed to compress metric", zap.String("metric", fmt.Sprintf("%+v", metric)), zap.Error(err))
-			return err
-		}
-
-		if err := gz.Flush(); err != nil {
-			logger.Log.Error("failed to flush compressed data", zap.Error(err))
-			return err
-		}
-		gz.Close()
-
-		req, err := http.NewRequest(http.MethodPost, addr, &b)
-		if err != nil {
-			logger.Log.Error("failed to create request", zap.String("url", addr), zap.Error(err))
-			return err
-		}
-
-		req.Header.Set("Content-Encoding", "gzip")
-		req.Header.Set("Content-Type", "application/json")
-		logger.Log.Info("sending metrics", zap.String("url", addr), zap.Any("metric", metric))
-
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			logger.Log.Error("failed to send metrics", zap.String("url", addr), zap.Error(err))
-		} else {
-			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusOK {
-				body, _ := io.ReadAll(resp.Body)
-				logger.Log.Error("invalid status code", zap.Int("status_code", resp.StatusCode), zap.String("body", string(body)))
-				return fmt.Errorf("invalid status code: %d", resp.StatusCode)
-			}
-		}
-	}
-	return nil
-}
-
-func (a *Agent) Run() {
-	logger.Log.Info("agent running")
-	pollTicker := time.NewTicker(a.PollInterval)
-	reportTicker := time.NewTicker(a.ReportSendInterval)
-
-	for {
-		select {
-		case <-pollTicker.C:
-			a.GetMetrics()
-		case <-reportTicker.C:
-			err := a.SendMetricsByBatch()
-			if err != nil {
-				panic(err)
-			}
-		}
-	}
 }
