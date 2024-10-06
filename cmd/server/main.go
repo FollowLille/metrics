@@ -25,6 +25,11 @@ func main() {
 		handler.HomeHandler(context, metricsStorage)
 	})
 
+	// Обработчик пинга к базе
+	router.GET("/ping", func(c *gin.Context) {
+		handler.PingHandler(c, flagDatabaseAddress)
+	})
+
 	// Обработчик обновлений
 	router.POST("/update/:type/:name/:value", func(c *gin.Context) {
 		handler.UpdateHandler(c, metricsStorage)

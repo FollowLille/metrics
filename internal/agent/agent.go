@@ -96,7 +96,7 @@ func (a *Agent) SendMetrics() error {
 			return err
 		}
 
-		if resp.StatusCode != config.StatusOk {
+		if resp.StatusCode != http.StatusOK {
 			return fmt.Errorf("invalid status code: %d", resp.StatusCode)
 		}
 	}
