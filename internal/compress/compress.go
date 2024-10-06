@@ -3,7 +3,6 @@ package compress
 import (
 	"bytes"
 	"compress/gzip"
-	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -107,11 +106,13 @@ func GzipResponseMiddleware() gin.HandlerFunc {
 
 		if strings.Contains(c.GetHeader("Accept-Encoding"), "gzip") {
 			contentType := c.GetHeader("Content-Type")
-			fmt.Println("content type: ", contentType)
 			if strings.Contains(contentType, "text/html") || strings.Contains(contentType, "application/json") {
 				c.Header("Content-Encoding", "gzip")
 				gz := NewCompressWriter(w)
-				defer gz.Close()
+				defer func() {
+					gz.Flush()
+					gz.Close()
+				}()
 				c.Writer = gz
 			}
 		}
