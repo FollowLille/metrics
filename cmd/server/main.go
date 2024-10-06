@@ -81,13 +81,22 @@ func Run(s server.Server, r *gin.Engine, str *storage.MemStorage) error {
 	var err error
 	stopChan := make(chan struct{})
 
-	str, file, err := loadMetricsFromFile(str)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
+	switch flagStorePlace {
+	case "file":
+		fmt.Println("Store place: file")
+		str, file, err := loadMetricsFromFile(str)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
 
-	go runPeriodicSaver(str, file, stopChan)
+		go runPeriodicFileSaver(str, file, stopChan)
+	case "database":
+		fmt.Println("Store place: database")
+		go runPeriodicDatabaseSaver(str, stopChan)
+	default:
+		fmt.Println("Store place was not set. Result will be stored in memory.")
+	}
 
 	err = r.Run(addr)
 	return err
@@ -142,13 +151,30 @@ func loadMetricsFromFile(str *storage.MemStorage) (*storage.MemStorage, *os.File
 	return str, file, nil
 }
 
-func runPeriodicSaver(str *storage.MemStorage, file *os.File, stopChan chan struct{}) {
+func runPeriodicFileSaver(str *storage.MemStorage, file *os.File, stopChan chan struct{}) {
 	ticker := time.NewTicker(time.Duration(flagStoreInterval) * time.Second)
 	for {
 		select {
 		case <-ticker.C:
+			fmt.Println("Save metrics to file")
 			if err := str.SaveMetricsToFile(file); err != nil {
 				logger.Log.Error("can't save metrics to file", zap.Error(err))
+			}
+		case <-stopChan:
+			fmt.Println("stop ticker")
+			return
+		}
+	}
+}
+
+func runPeriodicDatabaseSaver(str *storage.MemStorage, stopChan chan struct{}) {
+	ticker := time.NewTicker(time.Duration(flagStoreInterval) * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			fmt.Println("Save metrics to database")
+			if err := str.SaveMetricsToDatabase(flagDatabaseAddress); err != nil {
+				logger.Log.Error("can't save metrics to database", zap.Error(err))
 			}
 		case <-stopChan:
 			fmt.Println("stop ticker")
