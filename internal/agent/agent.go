@@ -45,7 +45,7 @@ func (a *Agent) Run() {
 		case <-pollTicker.C:
 			a.GetMetrics()
 		case <-reportTicker.C:
-			err := a.SendMetricsByBatch()
+			err := a.SendMetrics()
 			if err != nil {
 				logger.Log.Error("failed to send metrics", zap.Error(err))
 			}
