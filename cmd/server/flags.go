@@ -8,12 +8,13 @@ import (
 )
 
 var (
-	flagStoreInterval int64
-	flagAddress       string
-	flagLevel         string
-	flagFilePath      string
-	flagRestoreStr    string
-	flagRestore       bool
+	flagStoreInterval   int64
+	flagAddress         string
+	flagLevel           string
+	flagFilePath        string
+	flagRestoreStr      string
+	flagDatabaseAddress string
+	flagRestore         bool
 )
 
 func parseFlags() {
@@ -22,6 +23,7 @@ func parseFlags() {
 	pflag.StringVarP(&flagLevel, "level", "l", "info", "log level")
 	pflag.StringVarP(&flagFilePath, "file-path", "f", "./metrics", "file path")
 	pflag.StringVarP(&flagRestoreStr, "restore", "r", "true", "restore")
+	pflag.StringVarP(&flagDatabaseAddress, "database-address", "d", "host=localhost port=5432 user=postgres password=postgres dbname=postgres sslmode=disable", "database address")
 
 	pflag.Parse()
 
@@ -49,6 +51,10 @@ func parseFlags() {
 		flagRestoreStr = envRestore
 	}
 
+	if envDatabaseAddress := os.Getenv("DATABASE_DSN"); envDatabaseAddress != "" {
+		flagDatabaseAddress = envDatabaseAddress
+	}
+
 	var err error
 	flagRestore, err = strconv.ParseBool(flagRestoreStr)
 	if err != nil {
@@ -56,10 +62,11 @@ func parseFlags() {
 		os.Exit(1)
 	}
 
-	fmt.Println("Flags:", flagAddress, flagLevel, flagStoreInterval, flagFilePath, flagRestore)
+	fmt.Println("Flags:", flagAddress, flagLevel, flagStoreInterval, flagFilePath, flagRestore, flagDatabaseAddress)
 	fmt.Println("Address: ", os.Getenv("ADDRESS"))
 	fmt.Println("Log level: ", os.Getenv("LOG_LEVEL"))
 	fmt.Println("Store interval: ", os.Getenv("STORE_INTERVAL"))
 	fmt.Println("File path: ", os.Getenv("FILE_STORAGE_PATH"))
 	fmt.Println("Restore: ", os.Getenv("RESTORE"))
+	fmt.Println("Database address: ", os.Getenv("DATABASE_DSN"))
 }

@@ -141,7 +141,7 @@ func (a *Agent) SendMetrics() error {
 			logger.Log.Error("failed to send metrics", zap.String("url", addr), zap.Error(err))
 		} else {
 			defer resp.Body.Close()
-			if resp.StatusCode != config.StatusOk {
+			if resp.StatusCode != http.StatusOK {
 				body, _ := io.ReadAll(resp.Body)
 				logger.Log.Error("invalid status code", zap.Int("status_code", resp.StatusCode), zap.String("body", string(body)))
 				return fmt.Errorf("invalid status code: %d", resp.StatusCode)

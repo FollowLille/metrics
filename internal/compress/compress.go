@@ -11,7 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"github.com/FollowLille/metrics/internal/config"
 	"github.com/FollowLille/metrics/internal/logger"
 )
 
@@ -84,14 +83,14 @@ func GzipMiddleware() gin.HandlerFunc {
 		if strings.Contains(c.GetHeader("Content-Encoding"), "gzip") {
 			gz, err := gzip.NewReader(c.Request.Body)
 			if err != nil {
-				c.AbortWithStatus(config.StatusBadRequest)
+				c.AbortWithStatus(http.StatusBadRequest)
 				logger.Log.Error("failed to create gzip reader", zap.Error(err))
 				return
 			}
 			defer gz.Close()
 			body, err := io.ReadAll(gz)
 			if err != nil {
-				c.AbortWithStatus(config.StatusBadRequest)
+				c.AbortWithStatus(http.StatusBadRequest)
 				logger.Log.Error("failed to read gzip body", zap.Error(err))
 				return
 			}
