@@ -136,7 +136,7 @@ func (s *MemStorage) SaveMetricsToDatabase(adr string) error {
 		return fmt.Errorf("can't ping database: %s", err)
 	}
 
-	var maxID int = 0
+	var maxID int64
 	err = db.QueryRowContext(ctx, "SELECT COALESCE(MAX(load_id), 0) FROM metrics.metrics").Scan(&maxID)
 	if err != nil {
 		return fmt.Errorf("can't get max id: %s", err)
