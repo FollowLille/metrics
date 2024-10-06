@@ -23,7 +23,7 @@ func parseFlags() {
 	pflag.StringVarP(&flagLevel, "level", "l", "info", "log level")
 	pflag.StringVarP(&flagFilePath, "file-path", "f", "./metrics", "file path")
 	pflag.StringVarP(&flagRestoreStr, "restore", "r", "true", "restore")
-	pflag.StringVarP(&flagDatabaseAddress, "database-address", "d", "host=localhost port=5432 user=postgres password=postgres dbname=postgres sslmode=disable", "database address")
+	pflag.StringVarP(&flagDatabaseAddress, "database-address", "d", "postgres://login:password@localhost:5432/for_go?sslmode=disable", "database address")
 
 	pflag.Parse()
 
