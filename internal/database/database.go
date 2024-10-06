@@ -60,10 +60,17 @@ func SaveMetricsToDatabase(db *sql.DB, s *storage.MemStorage) error {
 	}
 
 	var query string
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		logger.Log.Error("can't begin transaction", zap.Error(err))
+		return fmt.Errorf("can't begin transaction: %s", err)
+	}
+
 	for id, value := range gauge {
 		query = "INSERT INTO metrics.metrics (load_id, metric_name, metric_type, gauge_value) VALUES ($1, $2, $3, $4)"
-		_, err = db.ExecContext(ctx, query, maxID+1, id, "gauge", value)
+		_, err = tx.ExecContext(ctx, query, maxID+1, id, "gauge", value)
 		if err != nil {
+			tx.Rollback()
 			logger.Log.Error("can't insert gauge", zap.Error(err))
 			return fmt.Errorf("can't insert gauge: %s", err)
 		}
@@ -71,13 +78,15 @@ func SaveMetricsToDatabase(db *sql.DB, s *storage.MemStorage) error {
 
 	for id, value := range counter {
 		query = "INSERT INTO metrics.metrics (load_id, metric_name, metric_type, counter_value) VALUES ($1, $2, $3, $4)"
-		_, err = db.ExecContext(ctx, query, maxID+1, id, "counter", value)
+		_, err = tx.ExecContext(ctx, query, maxID+1, id, "counter", value)
 		if err != nil {
+			tx.Rollback()
 			logger.Log.Error("can't insert counter", zap.Error(err))
 			return fmt.Errorf("can't insert counter: %s", err)
 		}
 	}
 
+	tx.Commit()
 	return nil
 }
 

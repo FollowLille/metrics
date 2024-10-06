@@ -71,7 +71,7 @@ func (s *MemStorage) LoadMetricsFromFile(file *os.File) error {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("can't read metrics from file: %s", err)
+		return fmt.Errorf("can't read metrics from file: %w", err)
 	}
 
 	if lastValue == "" {
@@ -97,8 +97,8 @@ func (s *MemStorage) LoadMetricsFromFile(file *os.File) error {
 }
 
 func (s *MemStorage) SaveMetricsToFile(file *os.File) error {
-	metrics := s.GetAllMetrics()
-	data, err := json.Marshal(metrics)
+	metricsBatch := s.GetAllMetrics()
+	data, err := json.Marshal(metricsBatch)
 	if err != nil {
 		return fmt.Errorf("can't marshal metrics: %s", err)
 	}

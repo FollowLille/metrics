@@ -83,10 +83,10 @@ func (a *Agent) GetMetrics() {
 	a.metrics = m
 }
 
-func (a *Agent) SendMetrics() error {
+func (a *Agent) SendMetricsByBatch() error {
+	var m []metrics.Metrics
 	for name, value := range a.metrics {
 		var metric metrics.Metrics
-
 		if name == "PollCount" {
 			metric.MType = "counter"
 			metric.ID = name
@@ -94,6 +94,73 @@ func (a *Agent) SendMetrics() error {
 			metric.Delta = &delta
 		} else {
 			metric.MType = "gauge"
+			metric.ID = name
+			value := float64(value)
+			metric.Value = &value
+		}
+		m = append(m, metric)
+	}
+	logger.Log.Info("preparing to use metrics", zap.Any("metrics", m))
+
+	jsonMetrics, err := json.Marshal(m)
+	if err != nil {
+		logger.Log.Error("failed to marshal metrics", zap.Error(err))
+		return err
+	}
+
+	var b bytes.Buffer
+	gz, err := gzip.NewWriterLevel(&b, gzip.BestCompression)
+	if err != nil {
+		logger.Log.Error("failed to create gzip writer", zap.Error(err))
+		return err
+	}
+
+	if _, err := gz.Write(jsonMetrics); err != nil {
+		logger.Log.Error("failed to compress metric", zap.Error(err))
+		return err
+	}
+
+	if err := gz.Flush(); err != nil {
+		logger.Log.Error("failed to flush compressed data", zap.Error(err))
+		return err
+	}
+	gz.Close()
+
+	logger.Log.Info("sending metrics", zap.Any("metrics", m))
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s:%d/updates", a.ServerAddress, a.ServerPort), &b)
+	if err != nil {
+		logger.Log.Error("failed to create request", zap.Error(err))
+		return err
+	}
+
+	req.Header.Set("Content-Encoding", "gzip")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		logger.Log.Error("failed to send request", zap.Error(err))
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		logger.Log.Error("failed to send request", zap.Error(err))
+		return err
+	}
+	logger.Log.Info("metrics sent successfully")
+	return nil
+
+}
+func (a *Agent) SendMetrics() error {
+	for name, value := range a.metrics {
+		var metric metrics.Metrics
+
+		if name == "PollCount" {
+			metric.MType = metrics.Counter
+			metric.ID = name
+			delta := int64(value)
+			metric.Delta = &delta
+		} else {
+			metric.MType = metrics.Gauge
 			metric.ID = name
 			value := float64(value)
 			metric.Value = &value
@@ -126,7 +193,7 @@ func (a *Agent) SendMetrics() error {
 		}
 		gz.Close()
 
-		req, err := http.NewRequest("POST", addr, &b)
+		req, err := http.NewRequest(http.MethodPost, addr, &b)
 		if err != nil {
 			logger.Log.Error("failed to create request", zap.String("url", addr), zap.Error(err))
 			return err
@@ -161,7 +228,7 @@ func (a *Agent) Run() {
 		case <-pollTicker.C:
 			a.GetMetrics()
 		case <-reportTicker.C:
-			err := a.SendMetrics()
+			err := a.SendMetricsByBatch()
 			if err != nil {
 				panic(err)
 			}

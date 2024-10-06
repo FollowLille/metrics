@@ -122,9 +122,16 @@ func UpdateByBodyHandler(c *gin.Context, storage *storage.MemStorage) {
 	}
 }
 
+func UpdatesByBodyHandler(c *gin.Context, storage *storage.MemStorage) {
+	if c.ContentType() == "application/json" {
+		UpdatesByJSON(c, storage)
+	} else {
+		c.String(http.StatusBadRequest, "invalid content type")
+	}
+}
+
 func UpdateByJSON(c *gin.Context, storage *storage.MemStorage) {
 	var metric metrics.Metrics
-	c.Header("Content-Type", "application/json")
 
 	// Сохраняем тело запроса для дальнейшего использования
 	bodyBytes, err := io.ReadAll(c.Request.Body)
@@ -143,7 +150,7 @@ func UpdateByJSON(c *gin.Context, storage *storage.MemStorage) {
 		return
 	}
 	switch metric.MType {
-	case "counter":
+	case metrics.Counter:
 		name, value := metric.ID, metric.Delta
 		if value == nil {
 			c.String(http.StatusBadRequest, "counter value is empty")
@@ -154,7 +161,7 @@ func UpdateByJSON(c *gin.Context, storage *storage.MemStorage) {
 		metric.Delta = &newValue
 		c.JSON(http.StatusOK, metric)
 		logger.Log.Info("counter updated", zap.String("counter_name", name), zap.Int64("counter_value", *value))
-	case "gauge":
+	case metrics.Gauge:
 		name, value := metric.ID, metric.Value
 		if value == nil {
 			c.String(http.StatusBadRequest, "gauge value is empty")
@@ -170,6 +177,51 @@ func UpdateByJSON(c *gin.Context, storage *storage.MemStorage) {
 	}
 }
 
+func UpdatesByJSON(c *gin.Context, storage *storage.MemStorage) {
+	var metricsBatch []metrics.Metrics
+
+	// Сохраняем тело запроса для дальнейшего использования
+	bodyBytes, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		logger.Log.Error("failed to read request body", zap.Error(err))
+		c.String(http.StatusBadRequest, "failed to read request body")
+		return
+	}
+
+	// Восстанавливаем тело запроса для дальнейшего использования
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+	if err := c.ShouldBindJSON(&metricsBatch); err != nil {
+		logger.Log.Error("failed to bind JSON", zap.Error(err))
+		c.String(http.StatusBadRequest, "invalid json")
+		return
+	}
+
+	for _, metric := range metricsBatch {
+		switch metric.MType {
+		case "counter":
+			name, value := metric.ID, metric.Delta
+			if value == nil {
+				c.String(http.StatusBadRequest, "counter value is empty")
+				return
+			}
+			storage.UpdateCounter(name, *value)
+			logger.Log.Info("counter updated", zap.String("counter_name", name), zap.Int64("counter_value", *value))
+		case "gauge":
+			name, value := metric.ID, metric.Value
+			if value == nil {
+				c.String(http.StatusBadRequest, "gauge value is empty")
+				return
+			}
+			storage.UpdateGauge(name, *value)
+			logger.Log.Info("gauge updated", zap.String("gauge_name", name), zap.Float64("gauge_value", *value))
+		default:
+			c.String(http.StatusBadRequest, "invalid metric type, must be counter or gauge")
+		}
+	}
+	c.JSON(http.StatusOK, metricsBatch)
+}
+
 func GetValueByBodyHandler(c *gin.Context, storage *storage.MemStorage) {
 	if c.ContentType() == "application/json" {
 		GetValueByJSON(c, storage)
@@ -180,8 +232,6 @@ func GetValueByBodyHandler(c *gin.Context, storage *storage.MemStorage) {
 
 func GetValueByJSON(c *gin.Context, storage *storage.MemStorage) {
 	var metric metrics.Metrics
-
-	c.Header("Content-Type", "application/json")
 
 	// Сохраняем тело запроса для дальнейшего использования
 	bodyBytes, err := io.ReadAll(c.Request.Body)
@@ -196,7 +246,6 @@ func GetValueByJSON(c *gin.Context, storage *storage.MemStorage) {
 
 	if err := c.BindJSON(&metric); err != nil {
 		logger.Log.Error("failed to bind JSON", zap.Error(err))
-		c.Header("Content-Type", "application/json")
 		c.String(http.StatusBadRequest, "invalid json")
 		return
 	}
