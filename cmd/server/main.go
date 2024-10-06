@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/FollowLille/metrics/internal/compress"
+	"github.com/FollowLille/metrics/internal/database"
 	"github.com/FollowLille/metrics/internal/handler"
 	"github.com/FollowLille/metrics/internal/logger"
 	"github.com/FollowLille/metrics/internal/server"
@@ -93,7 +95,17 @@ func Run(s server.Server, r *gin.Engine, str *storage.MemStorage) error {
 		go runPeriodicFileSaver(str, file, stopChan)
 	case "database":
 		fmt.Println("Store place: database")
-		go runPeriodicDatabaseSaver(str, stopChan)
+		database.InitDB(flagDatabaseAddress)
+		database.PrepareDB()
+
+		db := database.DB
+		err = database.LoadMetricsFromDatabase(str, db)
+		if err != nil {
+			return err
+		}
+		fmt.Println("Loaded metrics from database")
+
+		go runPeriodicDatabaseSaver(db, stopChan, str)
 	default:
 		fmt.Println("Store place was not set. Result will be stored in memory.")
 	}
@@ -167,13 +179,13 @@ func runPeriodicFileSaver(str *storage.MemStorage, file *os.File, stopChan chan 
 	}
 }
 
-func runPeriodicDatabaseSaver(str *storage.MemStorage, stopChan chan struct{}) {
+func runPeriodicDatabaseSaver(db *sql.DB, stopChan chan struct{}, str *storage.MemStorage) {
 	ticker := time.NewTicker(time.Duration(flagStoreInterval) * time.Second)
 	for {
 		select {
 		case <-ticker.C:
 			fmt.Println("Save metrics to database")
-			if err := str.SaveMetricsToDatabase(flagDatabaseAddress); err != nil {
+			if err := database.SaveMetricsToDatabase(db, str); err != nil {
 				logger.Log.Error("can't save metrics to database", zap.Error(err))
 			}
 		case <-stopChan:

@@ -2,17 +2,11 @@ package storage
 
 import (
 	"bufio"
-	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
-	"go.uber.org/zap"
-	"os"
-	"time"
-
 	_ "github.com/lib/pq"
+	"os"
 
-	"github.com/FollowLille/metrics/internal/logger"
 	"github.com/FollowLille/metrics/internal/metrics"
 )
 
@@ -116,50 +110,5 @@ func (s *MemStorage) SaveMetricsToFile(file *os.File) error {
 	if err != nil {
 		return fmt.Errorf("can't write metrics to file: %s", err)
 	}
-	return nil
-}
-
-func (s *MemStorage) SaveMetricsToDatabase(adr string) error {
-	gauge := s.GetAllGauges()
-	counter := s.GetAllCounters()
-
-	db, err := sql.Open("postgres", adr)
-	if err != nil {
-		return fmt.Errorf("can't open database: %s", err)
-	}
-	defer db.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if err := db.PingContext(ctx); err != nil {
-		return fmt.Errorf("can't ping database: %s", err)
-	}
-
-	var maxID int64
-	err = db.QueryRowContext(ctx, "SELECT COALESCE(MAX(load_id), 0) FROM metrics.metrics").Scan(&maxID)
-	if err != nil {
-		return fmt.Errorf("can't get max id: %s", err)
-	}
-
-	var query string
-	for id, value := range gauge {
-		query = "INSERT INTO metrics.metrics (load_id, metric_name, metric_type, gauge_value) VALUES ($1, $2, $3, $4)"
-		_, err = db.ExecContext(ctx, query, maxID+1, id, "gauge", value)
-		if err != nil {
-			logger.Log.Error("can't insert gauge", zap.Error(err))
-			return fmt.Errorf("can't insert gauge: %s", err)
-		}
-	}
-
-	for id, value := range counter {
-		query = "INSERT INTO metrics.metrics (load_id, metric_name, metric_type, counter_value) VALUES ($1, $2, $3, $4)"
-		_, err = db.ExecContext(ctx, query, maxID+1, id, "counter", value)
-		if err != nil {
-			logger.Log.Error("can't insert counter", zap.Error(err))
-			return fmt.Errorf("can't insert counter: %s", err)
-		}
-	}
-
 	return nil
 }
