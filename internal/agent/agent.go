@@ -232,7 +232,7 @@ func (a *Agent) Run() {
 		case <-reportTicker.C:
 			err := a.SendMetricsByBatch()
 			if err != nil {
-				panic(err)
+				logger.Log.Error("failed to send metrics", zap.Error(err))
 			}
 		}
 	}
