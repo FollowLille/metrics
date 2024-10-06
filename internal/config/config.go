@@ -18,4 +18,5 @@ const (
 	StatusOk         = http.StatusOK
 	StatusBadRequest = http.StatusBadRequest
 	StatusNotFound   = http.StatusNotFound
+	ServerError      = http.StatusInternalServerError
 )
