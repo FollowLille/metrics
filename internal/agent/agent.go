@@ -102,7 +102,7 @@ func (a *Agent) GetMetrics() {
 }
 
 func (a *Agent) SendMetricsByBatch() error {
-	fmt.Println("send metrics by batch")
+	logger.Log.Info("preparing to send metrics by batch")
 	var m []metrics.Metrics
 	for name, value := range a.metrics {
 		var metric metrics.Metrics
@@ -118,7 +118,6 @@ func (a *Agent) SendMetricsByBatch() error {
 		}
 		m = append(m, metric)
 	}
-
 	logger.Log.Info("preparing to use metrics", zap.Any("metrics", m))
 	jsonMetrics, err := json.Marshal(m)
 	if err != nil {
