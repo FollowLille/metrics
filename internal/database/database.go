@@ -29,7 +29,14 @@ func InitDB(connStr string) {
 }
 
 func PrepareDB() {
-	_, err := DB.Exec("CREATE TABLE IF NOT EXISTS metrics.metrics (load_id int not null, metric_type text not null, metric_name text not null, gauge_value double precision, counter_value int)")
+	// Create schema
+	_, err := DB.Exec("CREATE SCHEMA IF NOT EXISTS metrics")
+	if err != nil {
+		logger.Log.Error("can't create schema", zap.Error(err))
+	}
+
+	// Create table
+	_, err = DB.Exec("CREATE TABLE IF NOT EXISTS metrics.metrics (load_id int not null, metric_type text not null, metric_name text not null, gauge_value double precision, counter_value int)")
 	if err != nil {
 		logger.Log.Error("can't create table", zap.Error(err))
 	}
@@ -92,10 +99,15 @@ func LoadMetricsFromDatabase(str *storage.MemStorage, db *sql.DB) error {
 	var gaugeValue float64
 	var counterValue int64
 
-	gauge_rows, err := db.QueryContext(ctx, "SELECT metric_name, gauge_value FROM metrics.metrics WHERE load_id = $1 and metric_type = 'gauge'", maxID)
+	gaugeRows, err := db.QueryContext(ctx, "SELECT metric_name, gauge_value FROM metrics.metrics WHERE load_id = $1 and metric_type = 'gauge'", maxID)
+	if err != nil {
+		logger.Log.Error("can't get gauge", zap.Error(err))
+		return fmt.Errorf("can't get gauge: %s", err)
+	}
 
-	for gauge_rows.Next() {
-		err = gauge_rows.Scan(&metricName, &gaugeValue)
+	defer gaugeRows.Close()
+	for gaugeRows.Next() {
+		err = gaugeRows.Scan(&metricName, &gaugeValue)
 		if err != nil {
 			logger.Log.Error("can't scan gauge", zap.Error(err))
 			return fmt.Errorf("can't scan gauge: %s", err)
@@ -103,15 +115,32 @@ func LoadMetricsFromDatabase(str *storage.MemStorage, db *sql.DB) error {
 		str.UpdateGauge(metricName, gaugeValue)
 	}
 
-	counter_rows, err := db.QueryContext(ctx, "SELECT metric_name, counter_value FROM metrics.metrics WHERE load_id = $1 and metric_type = 'counter'", maxID)
+	err = gaugeRows.Err()
+	if err != nil {
+		logger.Log.Error("can't get gauge", zap.Error(err))
+		return fmt.Errorf("can't get gauge: %s", err)
+	}
 
-	for counter_rows.Next() {
-		err = counter_rows.Scan(&metricName, &counterValue)
+	counterRows, err := db.QueryContext(ctx, "SELECT metric_name, counter_value FROM metrics.metrics WHERE load_id = $1 and metric_type = 'counter'", maxID)
+	if err != nil {
+		logger.Log.Error("can't get counter", zap.Error(err))
+		return fmt.Errorf("can't get counter: %s", err)
+	}
+
+	defer counterRows.Close()
+	for counterRows.Next() {
+		err = counterRows.Scan(&metricName, &counterValue)
 		if err != nil {
 			logger.Log.Error("can't scan counter", zap.Error(err))
 			return fmt.Errorf("can't scan counter: %s", err)
 		}
 		str.UpdateCounter(metricName, counterValue)
+	}
+
+	err = counterRows.Err()
+	if err != nil {
+		logger.Log.Error("can't get counter", zap.Error(err))
+		return fmt.Errorf("can't get counter: %s", err)
 	}
 	return nil
 }
