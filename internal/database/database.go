@@ -232,6 +232,11 @@ func QueryRowsWithRetry(ctx context.Context, db *sql.DB, query string, args ...i
 		return nil, err
 	}
 
+	if rows.Err() != nil {
+		logger.Log.Error("can't get rows", zap.Error(rows.Err()))
+		return nil, rows.Err()
+	}
+
 	logger.Log.Info("query successfully executed", zap.String("query", query))
 	return rows, nil
 }
