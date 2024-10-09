@@ -10,11 +10,11 @@ import (
 )
 
 var (
-	ConnectionError           = errors.New("connection error")
-	ServerError               = errors.New("server error")
-	NonRetriableError         = errors.New("not retriable error")
-	NonRetriablePostgresError = errors.New("non retriable postgres error")
-	RetriablePostgresError    = errors.New("retriable postgres error")
+	ErrorConnection           = errors.New("connection error")
+	ErrorServer               = errors.New("server error")
+	ErrorNonRetriable         = errors.New("not retriable error")
+	ErrorNonRetriablePostgres = errors.New("non retriable postgres error")
+	ErrorRetriablePostgres    = errors.New("retriable postgres error")
 )
 
 func Retry(operation func() error) error {
@@ -25,7 +25,7 @@ func Retry(operation func() error) error {
 		if err == nil {
 			return nil
 		}
-		if err == NonRetriableError {
+		if err == ErrorNonRetriable {
 			return err
 		}
 		time.Sleep(delay)

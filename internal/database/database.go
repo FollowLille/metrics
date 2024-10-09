@@ -170,10 +170,10 @@ func ExecQueryWithRetry(ctx context.Context, exec ExecContexter, query string, a
 		if execErr != nil {
 			if retry.IsRetriablePostgresError(execErr) {
 				logger.Log.Error("retriable postgres error", zap.Error(execErr))
-				return retry.RetriablePostgresError
+				return retry.ErrorRetriablePostgres
 			}
 			logger.Log.Error("non retriable postgres error", zap.Error(execErr))
-			return retry.NonRetriablePostgresError
+			return retry.ErrorNonRetriablePostgres
 		}
 		return nil
 	})
@@ -193,10 +193,10 @@ func QueryRowWithRetry(ctx context.Context, db *sql.DB, query string, dest ...in
 		if scanErr := row.Scan(dest...); scanErr != nil {
 			if retry.IsRetriablePostgresError(scanErr) {
 				logger.Log.Error("retriable postgres error", zap.Error(scanErr))
-				return retry.RetriablePostgresError
+				return retry.ErrorRetriablePostgres
 			}
 			logger.Log.Error("non retriable postgres error", zap.Error(scanErr))
-			return retry.NonRetriablePostgresError
+			return retry.ErrorNonRetriablePostgres
 		}
 		return nil
 	})
@@ -219,10 +219,14 @@ func QueryRowsWithRetry(ctx context.Context, db *sql.DB, query string, args ...i
 		if err != nil {
 			if retry.IsRetriablePostgresError(err) {
 				logger.Log.Error("retriable postgres error", zap.Error(err))
-				return retry.RetriablePostgresError
+				return retry.ErrorRetriablePostgres
 			}
 			logger.Log.Error("non retriable postgres error", zap.Error(err))
-			return retry.NonRetriablePostgresError
+			return retry.ErrorNonRetriablePostgres
+		}
+		if rows.Err() != nil {
+			logger.Log.Error("can't get rows", zap.Error(rows.Err()))
+			return retry.ErrorNonRetriable
 		}
 		return nil
 	})
@@ -230,11 +234,6 @@ func QueryRowsWithRetry(ctx context.Context, db *sql.DB, query string, args ...i
 	if err != nil {
 		logger.Log.Error("can't execute query", zap.Error(err))
 		return nil, err
-	}
-
-	if rows.Err() != nil {
-		logger.Log.Error("can't get rows", zap.Error(rows.Err()))
-		return nil, rows.Err()
 	}
 
 	logger.Log.Info("query successfully executed", zap.String("query", query))

@@ -151,18 +151,18 @@ func (a *Agent) sendBatchMetrics(b bytes.Buffer) error {
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		logger.Log.Error("failed to send request", zap.Error(err))
-		return retry.ConnectionError
+		return retry.ErrorConnection
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 500 && resp.StatusCode <= 504 {
 		logger.Log.Error("received retriable status code", zap.Int("status_code", resp.StatusCode))
-		return retry.ServerError
+		return retry.ErrorServer
 	}
 
 	if resp.StatusCode != http.StatusOK {
 		logger.Log.Error("received non retriable status code", zap.Int("status_code", resp.StatusCode))
-		return retry.NonRetriableError
+		return retry.ErrorNonRetriable
 	}
 	return nil
 }
@@ -232,13 +232,13 @@ func (a *Agent) sendSingleMetric(b bytes.Buffer) error {
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		logger.Log.Error("failed to send request", zap.Error(err))
-		return retry.ConnectionError
+		return retry.ErrorConnection
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 500 && resp.StatusCode <= 504 {
 		logger.Log.Error("received retriable status code", zap.Int("status_code", resp.StatusCode))
-		return retry.ServerError
+		return retry.ErrorServer
 	}
 
 	return nil
