@@ -4,12 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"go.uber.org/zap"
+	"github.com/FollowLille/metrics/internal/retry"
 	"log"
 	"time"
 
 	"github.com/FollowLille/metrics/internal/logger"
 	"github.com/FollowLille/metrics/internal/storage"
+	"go.uber.org/zap"
 )
 
 var DB *sql.DB
@@ -56,7 +57,7 @@ func SaveMetricsToDatabase(db *sql.DB, s *storage.MemStorage) error {
 	}
 
 	var maxID int64
-	err := db.QueryRowContext(ctx, "SELECT COALESCE(MAX(load_id), 0) FROM metrics.metrics").Scan(&maxID)
+	err := QueryRowWithRetry(ctx, db, "SELECT COALESCE(MAX(load_id), 0) FROM metrics.metrics", &maxID)
 	if err != nil {
 		return fmt.Errorf("can't get max id: %s", err)
 	}
@@ -70,7 +71,7 @@ func SaveMetricsToDatabase(db *sql.DB, s *storage.MemStorage) error {
 
 	for id, value := range gauge {
 		query := "INSERT INTO metrics.metrics (load_id, metric_name, metric_type, gauge_value) VALUES ($1, $2, $3, $4)"
-		_, err = tx.ExecContext(ctx, query, maxID+1, id, "gauge", value)
+		err = ExecQueryWithRetry(ctx, tx, query, maxID+1, id, "gauge", value)
 		if err != nil {
 			logger.Log.Error("can't insert gauge", zap.Error(err))
 			return fmt.Errorf("can't insert gauge: %s", err)
@@ -79,7 +80,7 @@ func SaveMetricsToDatabase(db *sql.DB, s *storage.MemStorage) error {
 
 	for id, value := range counter {
 		query := "INSERT INTO metrics.metrics (load_id, metric_name, metric_type, counter_value) VALUES ($1, $2, $3, $4)"
-		_, err = tx.ExecContext(ctx, query, maxID+1, id, "counter", value)
+		err = ExecQueryWithRetry(ctx, tx, query, maxID+1, id, "counter", value)
 		if err != nil {
 			logger.Log.Error("can't insert counter", zap.Error(err))
 			return fmt.Errorf("can't insert counter: %s", err)
@@ -104,7 +105,7 @@ func LoadMetricsFromDatabase(str *storage.MemStorage, db *sql.DB) error {
 	}
 
 	var maxID int64
-	err := db.QueryRowContext(ctx, "SELECT COALESCE(MAX(load_id), 0) FROM metrics.metrics").Scan(&maxID)
+	err := QueryRowWithRetry(ctx, db, "SELECT COALESCE(MAX(load_id), 0) FROM metrics.metrics", &maxID)
 	if err != nil {
 		return fmt.Errorf("can't get max id: %s", err)
 	}
@@ -113,7 +114,7 @@ func LoadMetricsFromDatabase(str *storage.MemStorage, db *sql.DB) error {
 	var gaugeValue float64
 	var counterValue int64
 
-	gaugeRows, err := db.QueryContext(ctx, "SELECT metric_name, gauge_value FROM metrics.metrics WHERE load_id = $1 and metric_type = 'gauge'", maxID)
+	gaugeRows, err := QueryRowsWithRetry(ctx, db, "SELECT metric_name, gauge_value FROM metrics.metrics WHERE load_id = $1 and metric_type = 'gauge'", maxID)
 	if err != nil {
 		logger.Log.Error("can't get gauge", zap.Error(err))
 		return fmt.Errorf("can't get gauge: %s", err)
@@ -134,7 +135,7 @@ func LoadMetricsFromDatabase(str *storage.MemStorage, db *sql.DB) error {
 		return fmt.Errorf("can't get gauge: %s", err)
 	}
 
-	counterRows, err := db.QueryContext(ctx, "SELECT metric_name, counter_value FROM metrics.metrics WHERE load_id = $1 and metric_type = 'counter'", maxID)
+	counterRows, err := QueryRowsWithRetry(ctx, db, "SELECT metric_name, counter_value FROM metrics.metrics WHERE load_id = $1 and metric_type = 'counter'", maxID)
 	if err != nil {
 		logger.Log.Error("can't get counter", zap.Error(err))
 		return fmt.Errorf("can't get counter: %s", err)
@@ -156,4 +157,81 @@ func LoadMetricsFromDatabase(str *storage.MemStorage, db *sql.DB) error {
 	}
 
 	return nil
+}
+
+// ExecContexter interface нужен чтобы функции записи\чтения умели работать как с sql.DB так и с sql.Tx
+type ExecContexter interface {
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+}
+
+func ExecQueryWithRetry(ctx context.Context, exec ExecContexter, query string, agrs ...interface{}) error {
+	err := retry.Retry(func() error {
+		_, execErr := exec.ExecContext(ctx, query, agrs...)
+		if execErr != nil {
+			if retry.IsRetriablePostgresError(execErr) {
+				logger.Log.Error("retriable postgres error", zap.Error(execErr))
+				return retry.RetriablePostgresError
+			}
+			logger.Log.Error("non retriable postgres error", zap.Error(execErr))
+			return retry.NonRetriablePostgresError
+		}
+		return nil
+	})
+
+	if err != nil {
+		logger.Log.Error("can't execute query", zap.Error(err))
+		return err
+	}
+
+	logger.Log.Info("query successfully executed", zap.String("query", query))
+	return nil
+}
+
+func QueryRowWithRetry(ctx context.Context, db *sql.DB, query string, dest ...interface{}) error {
+	err := retry.Retry(func() error {
+		row := db.QueryRowContext(ctx, query)
+		if scanErr := row.Scan(dest...); scanErr != nil {
+			if retry.IsRetriablePostgresError(scanErr) {
+				logger.Log.Error("retriable postgres error", zap.Error(scanErr))
+				return retry.RetriablePostgresError
+			}
+			logger.Log.Error("non retriable postgres error", zap.Error(scanErr))
+			return retry.NonRetriablePostgresError
+		}
+		return nil
+	})
+
+	if err != nil {
+		logger.Log.Error("can't execute query", zap.Error(err))
+		return err
+	}
+
+	logger.Log.Info("query successfully executed", zap.String("query", query))
+	return nil
+}
+
+func QueryRowsWithRetry(ctx context.Context, db *sql.DB, query string, args ...interface{}) (*sql.Rows, error) {
+	var rows *sql.Rows
+	var err error
+
+	err = retry.Retry(func() error {
+		rows, err = db.QueryContext(ctx, query, args...)
+		if err != nil {
+			if retry.IsRetriablePostgresError(err) {
+				logger.Log.Error("retriable postgres error", zap.Error(err))
+				return retry.RetriablePostgresError
+			}
+			logger.Log.Error("non retriable postgres error", zap.Error(err))
+			return retry.NonRetriablePostgresError
+		}
+		return nil
+	})
+
+	if err != nil {
+		logger.Log.Error("can't execute query", zap.Error(err))
+		return nil, err
+	}
+
+	logger.Log.Info("query successfully executed", zap.String("query", query))
+	return rows, nil
 }

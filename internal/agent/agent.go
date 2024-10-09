@@ -5,8 +5,8 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"github.com/FollowLille/metrics/internal/retry"
 	"go.uber.org/zap"
-	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -127,7 +127,18 @@ func (a *Agent) SendMetricsByBatch() error {
 	}
 	gz.Close()
 
-	logger.Log.Info("sending metrics", zap.Any("metrics", m))
+	err = retry.Retry(func() error {
+		return a.sendBatchMetrics(b)
+	})
+
+	if err != nil {
+		logger.Log.Error("failed to send metrics", zap.Error(err))
+		return err
+	}
+	return nil
+}
+
+func (a *Agent) sendBatchMetrics(b bytes.Buffer) error {
 	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s:%d/updates", a.ServerAddress, a.ServerPort), &b)
 	if err != nil {
 		logger.Log.Error("failed to create request", zap.Error(err))
@@ -140,18 +151,22 @@ func (a *Agent) SendMetricsByBatch() error {
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		logger.Log.Error("failed to send request", zap.Error(err))
-		return err
+		return retry.ConnectionError
 	}
 	defer resp.Body.Close()
-	fmt.Println("Status code: ", resp.StatusCode)
-	if resp.StatusCode != http.StatusOK {
-		logger.Log.Error("failed to send request", zap.Error(err))
-		return err
-	}
-	logger.Log.Info("metrics sent successfully")
-	return nil
 
+	if resp.StatusCode >= 500 && resp.StatusCode <= 504 {
+		logger.Log.Error("received retriable status code", zap.Int("status_code", resp.StatusCode))
+		return retry.ServerError
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		logger.Log.Error("received non retriable status code", zap.Int("status_code", resp.StatusCode))
+		return retry.NonRetriableError
+	}
+	return nil
 }
+
 func (a *Agent) SendMetrics() error {
 	for name, value := range a.metrics {
 		var metric metrics.Metrics
@@ -175,8 +190,6 @@ func (a *Agent) SendMetrics() error {
 			return err
 		}
 
-		addr := fmt.Sprintf("http://%s:%d/update", a.ServerAddress, a.ServerPort)
-
 		var b bytes.Buffer
 		gz, err := gzip.NewWriterLevel(&b, gzip.BestCompression)
 		if err != nil {
@@ -195,28 +208,39 @@ func (a *Agent) SendMetrics() error {
 		}
 		gz.Close()
 
-		req, err := http.NewRequest(http.MethodPost, addr, &b)
+		err = retry.Retry(func() error {
+			return a.sendSingleMetric(b)
+		})
 		if err != nil {
-			logger.Log.Error("failed to create request", zap.String("url", addr), zap.Error(err))
+			logger.Log.Error("failed to send metric", zap.String("metric", fmt.Sprintf("%+v", metric)), zap.Error(err))
 			return err
 		}
-
-		req.Header.Set("Content-Encoding", "gzip")
-		req.Header.Set("Content-Type", "application/json")
-		logger.Log.Info("sending metrics", zap.String("url", addr), zap.Any("metric", metric))
-
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			logger.Log.Error("failed to send metrics", zap.String("url", addr), zap.Error(err))
-		} else {
-			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusOK {
-				body, _ := io.ReadAll(resp.Body)
-				logger.Log.Error("invalid status code", zap.Int("status_code", resp.StatusCode), zap.String("body", string(body)))
-				return fmt.Errorf("invalid status code: %d", resp.StatusCode)
-			}
-		}
 	}
+	return nil
+}
+
+func (a *Agent) sendSingleMetric(b bytes.Buffer) error {
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s:%d/update", a.ServerAddress, a.ServerPort), &b)
+	if err != nil {
+		logger.Log.Error("failed to create request", zap.Error(err))
+		return err
+	}
+
+	req.Header.Set("Content-Encoding", "gzip")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		logger.Log.Error("failed to send request", zap.Error(err))
+		return retry.ConnectionError
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 500 && resp.StatusCode <= 504 {
+		logger.Log.Error("received retriable status code", zap.Int("status_code", resp.StatusCode))
+		return retry.ServerError
+	}
+
 	return nil
 }
 
