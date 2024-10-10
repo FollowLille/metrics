@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/FollowLille/metrics/internal/logger"
 	"os"
 	"strconv"
 	"strings"
@@ -17,6 +18,7 @@ func main() {
 		os.Exit(1)
 	}
 	a := Init(flagAddress)
+	logger.Initialize("info")
 	a.Run()
 }
 

@@ -5,6 +5,9 @@ import (
 	"runtime"
 )
 
+const Counter = "counter"
+const Gauge = "gauge"
+
 func GetRuntimeMetrics() map[string]float64 {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)

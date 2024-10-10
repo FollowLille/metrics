@@ -1,7 +1,6 @@
 package config
 
 import (
-	"net/http"
 	"time"
 )
 
@@ -13,10 +12,8 @@ const (
 	ContentType        = "text/plain"
 )
 
-// status constants
-const (
-	StatusOk         = http.StatusOK
-	StatusBadRequest = http.StatusBadRequest
-	StatusNotFound   = http.StatusNotFound
-	ServerError      = http.StatusInternalServerError
-)
+var DatabaseRetryDelays = []time.Duration{
+	1 * time.Second,
+	3 * time.Second,
+	5 * time.Second,
+}

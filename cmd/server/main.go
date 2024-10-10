@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/FollowLille/metrics/internal/compress"
+	"github.com/FollowLille/metrics/internal/database"
 	"github.com/FollowLille/metrics/internal/handler"
 	"github.com/FollowLille/metrics/internal/logger"
 	"github.com/FollowLille/metrics/internal/server"
@@ -42,9 +44,18 @@ func main() {
 		handler.HomeHandler(context, metricsStorage)
 	})
 
+	// Обработчик пинга к базе
+	router.GET("/ping", func(c *gin.Context) {
+		handler.PingHandler(c, flagDatabaseAddress)
+	})
+
 	// Обработчик обновлений
 	router.POST("/update", func(c *gin.Context) {
 		handler.UpdateByBodyHandler(c, metricsStorage)
+	})
+
+	router.POST("/updates", func(c *gin.Context) {
+		handler.UpdatesByBodyHandler(c, metricsStorage)
 	})
 
 	router.POST("/update/:type/:name/:value", func(c *gin.Context) {
@@ -76,13 +87,32 @@ func Run(s server.Server, r *gin.Engine, str *storage.MemStorage) error {
 	var err error
 	stopChan := make(chan struct{})
 
-	str, file, err := loadMetricsFromFile(str)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
+	switch flagStorePlace {
+	case "file":
+		fmt.Println("Store place: file")
+		str, file, err := loadMetricsFromFile(str)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
 
-	go runPeriodicSaver(str, file, stopChan)
+		go runPeriodicFileSaver(str, file, stopChan)
+	case "database":
+		fmt.Println("Store place: database")
+		database.InitDB(flagDatabaseAddress)
+		database.PrepareDB()
+
+		db := database.DB
+		err = database.LoadMetricsFromDatabase(str, db)
+		if err != nil {
+			return err
+		}
+		fmt.Println("Loaded metrics from database")
+
+		go runPeriodicDatabaseSaver(db, stopChan, str)
+	default:
+		fmt.Println("Store place was not set. Result will be stored in memory.")
+	}
 
 	err = r.Run(addr)
 	return err
@@ -137,13 +167,30 @@ func loadMetricsFromFile(str *storage.MemStorage) (*storage.MemStorage, *os.File
 	return str, file, nil
 }
 
-func runPeriodicSaver(str *storage.MemStorage, file *os.File, stopChan chan struct{}) {
+func runPeriodicFileSaver(str *storage.MemStorage, file *os.File, stopChan chan struct{}) {
 	ticker := time.NewTicker(time.Duration(flagStoreInterval) * time.Second)
 	for {
 		select {
 		case <-ticker.C:
+			fmt.Println("Save metrics to file")
 			if err := str.SaveMetricsToFile(file); err != nil {
 				logger.Log.Error("can't save metrics to file", zap.Error(err))
+			}
+		case <-stopChan:
+			fmt.Println("stop ticker")
+			return
+		}
+	}
+}
+
+func runPeriodicDatabaseSaver(db *sql.DB, stopChan chan struct{}, str *storage.MemStorage) {
+	ticker := time.NewTicker(time.Duration(flagStoreInterval) * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			fmt.Println("Save metrics to database")
+			if err := database.SaveMetricsToDatabase(db, str); err != nil {
+				logger.Log.Error("can't save metrics to database", zap.Error(err))
 			}
 		case <-stopChan:
 			fmt.Println("stop ticker")
