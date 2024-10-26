@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"github.com/FollowLille/metrics/internal/crypto"
 	"os"
 	"strconv"
 	"strings"
@@ -12,7 +13,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/FollowLille/metrics/internal/compress"
-	"github.com/FollowLille/metrics/internal/crypto"
 	"github.com/FollowLille/metrics/internal/database"
 	"github.com/FollowLille/metrics/internal/handler"
 	"github.com/FollowLille/metrics/internal/logger"
@@ -37,13 +37,13 @@ func main() {
 	// Инициализация обработчиков
 	router.Use(logger.RequestLogger()).Use(logger.ResponseLogger())
 
+	// Инициализация сжатия
+	router.Use(compress.GzipMiddleware()).Use(compress.GzipResponseMiddleware())
+
 	// Инициализация хэша
 	if flagHashKey != "" {
 		router.Use(crypto.HashMiddleware([]byte(flagHashKey)))
 	}
-
-	// Инициализация сжатия
-	router.Use(compress.GzipMiddleware()).Use(compress.GzipResponseMiddleware())
 
 	// Обработчик стартовой страницы
 	router.GET("/", func(context *gin.Context) {
