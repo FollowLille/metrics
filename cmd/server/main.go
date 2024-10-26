@@ -37,13 +37,13 @@ func main() {
 	// Инициализация обработчиков
 	router.Use(logger.RequestLogger()).Use(logger.ResponseLogger())
 
-	// Инициализация сжатия
-	router.Use(compress.GzipMiddleware()).Use(compress.GzipResponseMiddleware())
-
 	// Инициализация хэша
 	if flagHashKey != "" {
 		router.Use(crypto.HashMiddleware([]byte(flagHashKey)))
 	}
+
+	// Инициализация сжатия
+	router.Use(compress.GzipMiddleware()).Use(compress.GzipResponseMiddleware())
 
 	// Обработчик стартовой страницы
 	router.GET("/", func(context *gin.Context) {
