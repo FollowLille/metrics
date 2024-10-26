@@ -16,19 +16,19 @@ import (
 // compressWriter реализует интерфейс http.ResponseWriter и позволяет прозрачно для сервера
 // сжимать передаваемые данные и выставлять правильные HTTP-заголовки
 type compressWriter struct {
-	gin.ResponseWriter
+	*responseWriter
 	zw *gzip.Writer
 }
 
-func NewCompressWriter(w gin.ResponseWriter) *compressWriter {
+func NewCompressWriter(w *responseWriter) *compressWriter {
 	return &compressWriter{
-		ResponseWriter: w,
+		responseWriter: w,
 		zw:             gzip.NewWriter(w),
 	}
 }
 
 func (c *compressWriter) Header() http.Header {
-	return c.ResponseWriter.Header()
+	return c.responseWriter.Header()
 }
 
 func (c *compressWriter) Write(p []byte) (int, error) {
@@ -37,9 +37,9 @@ func (c *compressWriter) Write(p []byte) (int, error) {
 
 func (c *compressWriter) WriteHeader(statusCode int) {
 	if statusCode < 300 {
-		c.ResponseWriter.Header().Set("Content-Encoding", "gzip")
+		c.responseWriter.Header().Set("Content-Encoding", "gzip")
 	}
-	c.ResponseWriter.WriteHeader(statusCode)
+	c.responseWriter.WriteHeader(statusCode)
 }
 
 // Close закрывает gzip.Writer и досылает все данные из буфера.
@@ -108,7 +108,7 @@ func GzipResponseMiddleware() gin.HandlerFunc {
 			contentType := c.GetHeader("Content-Type")
 			if strings.Contains(contentType, "text/html") || strings.Contains(contentType, "application/json") {
 				c.Header("Content-Encoding", "gzip")
-				gz := NewCompressWriter(w)
+				gz := NewCompressWriter(NewResponseWriter(w))
 				defer func() {
 					gz.Flush()
 					gz.Close()
@@ -118,4 +118,28 @@ func GzipResponseMiddleware() gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+type responseWriter struct {
+	gin.ResponseWriter
+	body *bytes.Buffer
+}
+
+func NewResponseWriter(w gin.ResponseWriter) *responseWriter {
+	return &responseWriter{
+		ResponseWriter: w,
+		body:           bytes.NewBuffer([]byte{}),
+	}
+}
+
+func (w *responseWriter) Write(p []byte) (int, error) {
+	n, err := w.body.Write(p)
+	if err != nil {
+		return n, err
+	}
+	return w.ResponseWriter.Write(p)
+}
+
+func (w *responseWriter) GetBody() []byte {
+	return w.body.Bytes()
 }
