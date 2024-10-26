@@ -5,11 +5,10 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"io"
 	"net/http"
-
-	"github.com/gin-gonic/gin"
 
 	"github.com/FollowLille/metrics/internal/logger"
 )
@@ -44,35 +43,35 @@ func HashMiddleware(key []byte) gin.HandlerFunc {
 		hash := c.Request.Header.Get("HashSHA256")
 		if hash == "" {
 			logger.Log.Info("Hash not found in request header")
-			c.AbortWithStatus(http.StatusBadRequest)
-			return
+			c.Next()
+		} else {
+			logger.Log.Info("Hash found in request header")
+			body, err := io.ReadAll(c.Request.Body)
+			if err != nil {
+				logger.Log.Error("Failed to read request body", zap.Error(err))
+				c.AbortWithStatus(http.StatusInternalServerError)
+				return
+			}
+
+			// Восстанавливаем тело запроса для последующей обработки
+			c.Request.Body = io.NopCloser(bytes.NewBuffer(body))
+
+			// Проверка хэша
+			if !VerifyHash(key, body, []byte(hash)) {
+				logger.Log.Error("Hash verification failed")
+				c.AbortWithStatus(http.StatusBadRequest)
+				return
+			}
+
+			w := &responseWriter{c.Writer, bytes.NewBuffer([]byte{})}
+			c.Writer = w
+
+			// Выполнение следующего обработчика
+			c.Next()
+
+			// Добавляем хэш в заголовок ответа
+			responseHash := CalculateHash(key, w.body.Bytes())
+			c.Writer.Header().Set("HashSHA256", responseHash)
 		}
-
-		body, err := io.ReadAll(c.Request.Body)
-		if err != nil {
-			logger.Log.Error("Failed to read request body", zap.Error(err))
-			c.AbortWithStatus(http.StatusInternalServerError)
-			return
-		}
-
-		// Восстанавливаем тело запроса для последующей обработки
-		c.Request.Body = io.NopCloser(bytes.NewBuffer(body))
-
-		// Проверка хэша
-		if !VerifyHash(key, body, []byte(hash)) {
-			logger.Log.Error("Hash verification failed")
-			c.AbortWithStatus(http.StatusBadRequest)
-			return
-		}
-
-		w := &responseWriter{c.Writer, bytes.NewBuffer([]byte{})}
-		c.Writer = w
-
-		// Выполнение следующего обработчика
-		c.Next()
-
-		// Добавляем хэш в заголовок ответа
-		responseHash := CalculateHash(key, w.body.Bytes())
-		c.Writer.Header().Set("HashSHA256", responseHash)
 	}
 }
