@@ -68,7 +68,7 @@ func UpdateHandler(c *gin.Context, storage *storage.MemStorage) {
 		return
 	}
 	switch metricType {
-	case "counter":
+	case metrics.Counter:
 		value, err := strconv.ParseInt(metricValue, 10, 64)
 		if err != nil {
 			c.String(http.StatusBadRequest, "metric value must be integer")
@@ -94,14 +94,14 @@ func GetValueHandler(c *gin.Context, storage *storage.MemStorage) {
 	metricName := c.Param("name")
 
 	switch metricType {
-	case "counter":
+	case metrics.Counter:
 		value, exists := storage.GetCounter(metricName)
 		if !exists {
 			c.String(http.StatusNotFound, "counter with name "+metricName+" not found")
 			return
 		}
 		c.String(http.StatusOK, fmt.Sprintf("%d", value))
-	case "gauge":
+	case metrics.Gauge:
 		value, exists := storage.GetGauge(metricName)
 		if !exists {
 			c.String(http.StatusNotFound, "gauge with name "+metricName+" not found")
@@ -199,7 +199,7 @@ func UpdatesByJSON(c *gin.Context, storage *storage.MemStorage) {
 
 	for _, metric := range metricsBatch {
 		switch metric.MType {
-		case "counter":
+		case metrics.Counter:
 			name, value := metric.ID, metric.Delta
 			if value == nil {
 				c.String(http.StatusBadRequest, "counter value is empty")
@@ -207,7 +207,7 @@ func UpdatesByJSON(c *gin.Context, storage *storage.MemStorage) {
 			}
 			storage.UpdateCounter(name, *value)
 			logger.Log.Info("counter updated", zap.String("counter_name", name), zap.Int64("counter_value", *value))
-		case "gauge":
+		case metrics.Gauge:
 			name, value := metric.ID, metric.Value
 			if value == nil {
 				c.String(http.StatusBadRequest, "gauge value is empty")
@@ -252,7 +252,7 @@ func GetValueByJSON(c *gin.Context, storage *storage.MemStorage) {
 
 	name := metric.ID
 	switch metric.MType {
-	case "counter":
+	case metrics.Counter:
 		value, exists := storage.GetCounter(name)
 		if !exists {
 			c.String(http.StatusNotFound, "counter with name "+name+" not found")
@@ -262,7 +262,7 @@ func GetValueByJSON(c *gin.Context, storage *storage.MemStorage) {
 		metric.Delta = &value
 		c.JSON(http.StatusOK, metric)
 		logger.Log.Info("counter value", zap.String("counter_name", name), zap.Int64("counter_value", value))
-	case "gauge":
+	case metrics.Gauge:
 		name := metric.ID
 		value, exists := storage.GetGauge(name)
 		if !exists {

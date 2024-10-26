@@ -5,19 +5,22 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
-	"github.com/FollowLille/metrics/internal/retry"
-	"go.uber.org/zap"
 	"net/http"
 	"net/url"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/FollowLille/metrics/internal/config"
+	"github.com/FollowLille/metrics/internal/crypto"
 	"github.com/FollowLille/metrics/internal/logger"
 	"github.com/FollowLille/metrics/internal/metrics"
+	"github.com/FollowLille/metrics/internal/retry"
 )
 
 type Agent struct {
 	ServerAddress      string
+	HashKey            string
 	ServerPort         int64
 	PollCount          int64
 	PollInterval       time.Duration
@@ -89,19 +92,18 @@ func (a *Agent) SendMetricsByBatch() error {
 	for name, value := range a.metrics {
 		var metric metrics.Metrics
 		if name == "PollCount" {
-			metric.MType = "counter"
+			metric.MType = metrics.Counter
 			metric.ID = name
 			delta := int64(value)
 			metric.Delta = &delta
 		} else {
-			metric.MType = "gauge"
+			metric.MType = metrics.Gauge
 			metric.ID = name
 			metric.Value = &value
 		}
 		m = append(m, metric)
 	}
 	logger.Log.Info("preparing to use metrics", zap.Any("metrics", m))
-	fmt.Println("preparing to use metrics", m)
 
 	jsonMetrics, err := json.Marshal(m)
 	if err != nil {
@@ -148,6 +150,10 @@ func (a *Agent) sendBatchMetrics(b bytes.Buffer) error {
 	req.Header.Set("Content-Encoding", "gzip")
 	req.Header.Set("Content-Type", "application/json")
 
+	if a.HashKey != "" {
+		hash := crypto.CalculateHash([]byte(a.HashKey), b.Bytes())
+		req.Header.Set("HashSHA256", hash)
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		logger.Log.Error("failed to send request", zap.Error(err))
@@ -228,6 +234,10 @@ func (a *Agent) sendSingleMetric(b bytes.Buffer) error {
 
 	req.Header.Set("Content-Encoding", "gzip")
 	req.Header.Set("Content-Type", "application/json")
+	if a.HashKey != "" {
+		hash := crypto.CalculateHash([]byte(a.HashKey), b.Bytes())
+		req.Header.Set("HashSHA256", hash)
+	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

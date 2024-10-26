@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/FollowLille/metrics/internal/compress"
+	"github.com/FollowLille/metrics/internal/crypto"
 	"github.com/FollowLille/metrics/internal/database"
 	"github.com/FollowLille/metrics/internal/handler"
 	"github.com/FollowLille/metrics/internal/logger"
@@ -35,6 +36,11 @@ func main() {
 
 	// Инициализация обработчиков
 	router.Use(logger.RequestLogger()).Use(logger.ResponseLogger())
+
+	// Инициализация хэша
+	if flagHashKey != "" {
+		router.Use(crypto.HashMiddleware([]byte(flagHashKey)))
+	}
 
 	// Инициализация сжатия
 	router.Use(compress.GzipMiddleware()).Use(compress.GzipResponseMiddleware())
@@ -83,13 +89,13 @@ func main() {
 
 func Run(s server.Server, r *gin.Engine, str *storage.MemStorage) error {
 	addr := fmt.Sprintf("%s:%d", s.Address, s.Port)
-	fmt.Printf("server running on: %s", addr)
+	logger.Log.Info("starting server", zap.String("address", addr))
 	var err error
 	stopChan := make(chan struct{})
 
 	switch flagStorePlace {
 	case "file":
-		fmt.Println("Store place: file")
+		logger.Log.Info("loading metrics from file")
 		str, file, err := loadMetricsFromFile(str)
 		if err != nil {
 			return err
@@ -98,7 +104,7 @@ func Run(s server.Server, r *gin.Engine, str *storage.MemStorage) error {
 
 		go runPeriodicFileSaver(str, file, stopChan)
 	case "database":
-		fmt.Println("Store place: database")
+		logger.Log.Info("loading metrics from database")
 		database.InitDB(flagDatabaseAddress)
 		database.PrepareDB()
 
@@ -107,11 +113,11 @@ func Run(s server.Server, r *gin.Engine, str *storage.MemStorage) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println("Loaded metrics from database")
+		logger.Log.Info("metrics loaded from database")
 
 		go runPeriodicDatabaseSaver(db, stopChan, str)
 	default:
-		fmt.Println("Store place was not set. Result will be stored in memory.")
+		logger.Log.Info("metrics will be stored in memory")
 	}
 
 	err = r.Run(addr)
@@ -172,12 +178,12 @@ func runPeriodicFileSaver(str *storage.MemStorage, file *os.File, stopChan chan 
 	for {
 		select {
 		case <-ticker.C:
-			fmt.Println("Save metrics to file")
+			logger.Log.Info("saving metrics to file")
 			if err := str.SaveMetricsToFile(file); err != nil {
 				logger.Log.Error("can't save metrics to file", zap.Error(err))
 			}
 		case <-stopChan:
-			fmt.Println("stop ticker")
+			logger.Log.Info("stop ticker")
 			return
 		}
 	}
@@ -188,12 +194,12 @@ func runPeriodicDatabaseSaver(db *sql.DB, stopChan chan struct{}, str *storage.M
 	for {
 		select {
 		case <-ticker.C:
-			fmt.Println("Save metrics to database")
+			logger.Log.Info("saving metrics to database")
 			if err := database.SaveMetricsToDatabase(db, str); err != nil {
 				logger.Log.Error("can't save metrics to database", zap.Error(err))
 			}
 		case <-stopChan:
-			fmt.Println("stop ticker")
+			logger.Log.Info("stop ticker")
 			return
 		}
 	}

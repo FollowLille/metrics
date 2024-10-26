@@ -2,13 +2,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/FollowLille/metrics/internal/logger"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/FollowLille/metrics/internal/agent"
+	"github.com/FollowLille/metrics/internal/logger"
 )
 
 func main() {
@@ -38,6 +38,7 @@ func Init(flags string) agent.Agent {
 	a := agent.Agent{}
 	a.ServerAddress = serverAddress
 	a.ServerPort = serverPort
+	a.HashKey = flagHashKey
 	a.PollInterval = time.Duration(flagPollInterval) * time.Second
 	a.ReportSendInterval = time.Duration(flagReportInterval) * time.Second
 	return a
