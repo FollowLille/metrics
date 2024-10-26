@@ -46,7 +46,8 @@ func HomeHandler(c *gin.Context, s *storage.MemStorage) {
 
 	if strings.Contains(c.GetHeader("Accept-Encoding"), "gzip") {
 		c.Header("Content-Encoding", "gzip")
-		gz := compress.NewCompressWriter(c.Writer)
+		wr := compress.NewResponseWriter(c.Writer)
+		gz := compress.NewCompressWriter(wr)
 		defer gz.Close()
 		c.Writer = gz
 	}
