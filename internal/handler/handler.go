@@ -250,22 +250,25 @@ func GetValueByJSON(c *gin.Context, storage *storage.MemStorage) {
 		c.String(http.StatusBadRequest, "invalid json")
 		return
 	}
-
+	logger.Log.Info("received metric", zap.Any("metric", metric))
 	name := metric.ID
 	switch metric.MType {
 	case metrics.Counter:
 		value, exists := storage.GetCounter(name)
+		logger.Log.Info("counter value", zap.String("counter_name", name), zap.Int64("counter_value", value))
 		if !exists {
 			c.String(http.StatusNotFound, "counter with name "+name+" not found")
 			logger.Log.Info("counter not found", zap.String("counter_name", name))
 			return
 		}
+
 		metric.Delta = &value
 		c.JSON(http.StatusOK, metric)
 		logger.Log.Info("counter value", zap.String("counter_name", name), zap.Int64("counter_value", value))
 	case metrics.Gauge:
 		name := metric.ID
 		value, exists := storage.GetGauge(name)
+		logger.Log.Info("gauge value", zap.String("gauge_name", name), zap.Float64("gauge_value", value))
 		if !exists {
 			c.String(http.StatusNotFound, "gauge with name "+name+" not found")
 			logger.Log.Info("gauge not found", zap.String("gauge_name", name))
