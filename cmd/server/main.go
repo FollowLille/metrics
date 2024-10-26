@@ -55,17 +55,17 @@ func main() {
 		handler.PingHandler(c, flagDatabaseAddress)
 	})
 
-	// Обработчик обновлений
+	// Обработчики обновлений
+	router.POST("/update/:type/:name/:value", func(c *gin.Context) {
+		handler.UpdateHandler(c, metricsStorage)
+	})
+
 	router.POST("/update", func(c *gin.Context) {
 		handler.UpdateByBodyHandler(c, metricsStorage)
 	})
 
 	router.POST("/updates", func(c *gin.Context) {
 		handler.UpdatesByBodyHandler(c, metricsStorage)
-	})
-
-	router.POST("/update/:type/:name/:value", func(c *gin.Context) {
-		handler.UpdateHandler(c, metricsStorage)
 	})
 
 	// Обработчик получения метрик
