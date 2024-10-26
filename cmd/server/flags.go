@@ -29,7 +29,7 @@ func parseFlags() {
 	pflag.StringVarP(&flagFilePath, "file-path", "f", "", "file path")
 	pflag.StringVarP(&flagRestoreStr, "restore", "r", "true", "restore")
 	pflag.StringVarP(&flagDatabaseAddress, "database-address", "d", "", "database address")
-	pflag.StringVarP(&flagHashKey, "hash-key", "k", "secret", "hash key")
+	pflag.StringVarP(&flagHashKey, "hash-key", "k", "", "hash key")
 
 	pflag.Parse()
 
