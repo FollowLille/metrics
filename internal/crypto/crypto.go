@@ -13,26 +13,22 @@ import (
 	"github.com/FollowLille/metrics/internal/logger"
 )
 
-// CalculateHash computes HMAC SHA256 hash
 func CalculateHash(key, data []byte) string {
 	mac := hmac.New(sha256.New, key)
 	mac.Write(data)
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
-// VerifyHash verifies HMAC SHA256 hash
 func VerifyHash(key, data, hash []byte) bool {
 	expectedHash := CalculateHash(key, data)
 	return hmac.Equal(hash, []byte(expectedHash))
 }
 
-// hashResponseWriter wraps gin.ResponseWriter to capture response body
 type hashResponseWriter struct {
 	gin.ResponseWriter
 	body *bytes.Buffer
 }
 
-// NewHashResponseWriter creates a new hashResponseWriter
 func NewHashResponseWriter(w gin.ResponseWriter) *hashResponseWriter {
 	return &hashResponseWriter{
 		ResponseWriter: w,
@@ -40,7 +36,6 @@ func NewHashResponseWriter(w gin.ResponseWriter) *hashResponseWriter {
 	}
 }
 
-// Write captures the response body
 func (w *hashResponseWriter) Write(p []byte) (int, error) {
 	n, err := w.body.Write(p)
 	if err != nil {
@@ -49,13 +44,16 @@ func (w *hashResponseWriter) Write(p []byte) (int, error) {
 	return w.ResponseWriter.Write(p)
 }
 
-// GetBody returns the captured response body
 func (w *hashResponseWriter) GetBody() []byte {
 	return w.body.Bytes()
 }
 
 func HashMiddleware(key []byte) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if string(key) == "" {
+			c.Next()
+			return
+		}
 		hash := c.Request.Header.Get("HashSHA256")
 		if hash == "" {
 			logger.Log.Info("Hash not found in request header")
@@ -87,6 +85,6 @@ func HashMiddleware(key []byte) gin.HandlerFunc {
 
 		originalBody := w.GetBody()
 		responseHash := CalculateHash(key, originalBody)
-		c.Writer.Header().Set("HashSHA256", responseHash)
+		c.Header("HashSHA256", responseHash)
 	}
 }

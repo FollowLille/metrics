@@ -38,9 +38,7 @@ func main() {
 	router.Use(logger.RequestLogger()).Use(logger.ResponseLogger())
 
 	// Инициализация хэша
-	if flagHashKey != "" {
-		router.Use(crypto.HashMiddleware([]byte(flagHashKey)))
-	}
+	router.Use(crypto.HashMiddleware([]byte(flagHashKey)))
 
 	// Инициализация сжатия
 	router.Use(compress.GzipMiddleware()).Use(compress.GzipResponseMiddleware())
@@ -70,6 +68,10 @@ func main() {
 
 	// Обработчик получения метрик
 	router.POST("/value", func(c *gin.Context) {
+		handler.GetValueByBodyHandler(c, metricsStorage)
+	})
+
+	router.POST("/value/", func(c *gin.Context) {
 		handler.GetValueByBodyHandler(c, metricsStorage)
 	})
 

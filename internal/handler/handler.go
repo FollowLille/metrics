@@ -276,7 +276,6 @@ func GetValueByJSON(c *gin.Context, storage *storage.MemStorage) {
 		}
 		metric.Value = &value
 		c.JSON(http.StatusOK, metric)
-		logger.Log.Info("gauge value", zap.String("gauge_name", name), zap.Float64("gauge_value", value))
 	default:
 		c.String(http.StatusBadRequest, "invalid metric type, must be counter or gauge")
 		logger.Log.Info("invalid metric type", zap.String("metric_type", metric.MType))
