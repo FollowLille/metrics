@@ -62,6 +62,10 @@ func main() {
 		handler.UpdateByBodyHandler(c, metricsStorage)
 	})
 
+	router.POST("/update/", func(c *gin.Context) {
+		handler.UpdateByBodyHandler(c, metricsStorage)
+	})
+
 	router.POST("/updates", func(c *gin.Context) {
 		handler.UpdatesByBodyHandler(c, metricsStorage)
 	})
