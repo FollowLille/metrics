@@ -22,7 +22,7 @@ func main() {
 	a.Run()
 }
 
-func Init(flags string) agent.Agent {
+func Init(flags string) *agent.Agent {
 	splitedAddress := strings.Split(flags, ":")
 	if len(splitedAddress) != 2 {
 		fmt.Printf("invalid address %s, expected host:port", flags)
@@ -43,5 +43,5 @@ func Init(flags string) agent.Agent {
 	a.ReportSendInterval = time.Duration(flagReportInterval) * time.Second
 	a.RateLimit = flagRateLimit
 
-	return *a
+	return a
 }
