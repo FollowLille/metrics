@@ -444,7 +444,6 @@ func TestAgent_ParallelSendMetrics(t *testing.T) {
 				PollInterval:       config.PollInterval,
 				ReportSendInterval: config.ReportSendInterval,
 				metrics:            make(map[string]float64),
-				mutex:              sync.Mutex{},
 			},
 		},
 	}
@@ -457,7 +456,6 @@ func TestAgent_ParallelSendMetrics(t *testing.T) {
 				PollInterval:       tt.fields.PollInterval,
 				ReportSendInterval: tt.fields.ReportSendInterval,
 				metrics:            tt.fields.metrics,
-				mutex:              tt.fields.mutex,
 			}
 			a.ParallelSendMetrics()
 			server.AssertNumberOfCalls(t, "ServeHTTP", int(a.RateLimit))
