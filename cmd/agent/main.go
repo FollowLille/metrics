@@ -35,11 +35,13 @@ func Init(flags string) agent.Agent {
 		os.Exit(1)
 	}
 
-	a := agent.Agent{}
+	a := agent.NewAgent()
 	a.ServerAddress = serverAddress
 	a.ServerPort = serverPort
 	a.HashKey = flagHashKey
 	a.PollInterval = time.Duration(flagPollInterval) * time.Second
 	a.ReportSendInterval = time.Duration(flagReportInterval) * time.Second
-	return a
+	a.RateLimit = flagRateLimit
+
+	return *a
 }

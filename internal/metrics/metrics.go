@@ -3,6 +3,9 @@ package metrics
 import (
 	"math/rand"
 	"runtime"
+
+	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/mem"
 )
 
 const Counter = "counter"
@@ -40,6 +43,25 @@ func GetRuntimeMetrics() map[string]float64 {
 	metrics["Sys"] = float64(m.Sys)
 	metrics["TotalAlloc"] = float64(m.TotalAlloc)
 	metrics["RandomValue"] = rand.Float64()
+
+	return metrics
+}
+
+func GetGopsutilMetrics() map[string]float64 {
+	metrics := make(map[string]float64)
+
+	// Получаем данные о памяти
+	v, err := mem.VirtualMemory()
+	if err == nil {
+		metrics["TotalMemory"] = float64(v.Total)
+		metrics["FreeMemory"] = float64(v.Free)
+	}
+
+	// Получаем данные о загрузке CPU
+	cpuUtilization, err := cpu.Percent(0, false)
+	if err == nil && len(cpuUtilization) > 0 {
+		metrics["CPUutilization1"] = cpuUtilization[0]
+	}
 
 	return metrics
 }

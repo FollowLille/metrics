@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"go.uber.org/zap"
@@ -23,9 +24,11 @@ type Agent struct {
 	HashKey            string
 	ServerPort         int64
 	PollCount          int64
+	RateLimit          int64
 	PollInterval       time.Duration
 	ReportSendInterval time.Duration
 	metrics            map[string]float64
+	mutex              sync.Mutex
 }
 
 func NewAgent() *Agent {
@@ -34,6 +37,7 @@ func NewAgent() *Agent {
 		ServerPort:         config.Port,
 		PollInterval:       config.PollInterval,
 		ReportSendInterval: config.ReportSendInterval,
+		RateLimit:          config.RateLimit,
 		metrics:            make(map[string]float64),
 	}
 }
@@ -81,33 +85,89 @@ func (a *Agent) ChangePort(port int64) error {
 
 func (a *Agent) GetMetrics() {
 	m := metrics.GetRuntimeMetrics()
-	a.PollCount++
-	m["PollCount"] = float64(a.PollCount)
-	a.metrics = m
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+	for k, v := range m {
+		a.metrics[k] = v
+	}
 }
 
-func (a *Agent) SendMetricsByBatch() error {
-	logger.Log.Info("preparing to send metrics by batch")
-	var m []metrics.Metrics
-	for name, value := range a.metrics {
-		var metric metrics.Metrics
-		if name == "PollCount" {
-			metric.MType = metrics.Counter
-			metric.ID = name
-			delta := int64(value)
-			metric.Delta = &delta
-		} else {
-			metric.MType = metrics.Gauge
-			metric.ID = name
-			metric.Value = &value
-		}
-		m = append(m, metric)
+func (a *Agent) GetGopsutilMetrics() {
+	m := metrics.GetGopsutilMetrics()
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+	for k, v := range m {
+		a.metrics[k] = v
 	}
-	logger.Log.Info("preparing to use metrics", zap.Any("metrics", m))
+}
 
-	jsonMetrics, err := json.Marshal(m)
+func (a *Agent) IncreasePollCount() {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+	a.PollCount++
+}
+
+func (a *Agent) Run() {
+	logger.Log.Info("agent running")
+	pollTicker := time.NewTicker(a.PollInterval)
+	reportTicker := time.NewTicker(a.ReportSendInterval)
+	defer pollTicker.Stop()
+	defer reportTicker.Stop()
+
+	for {
+		select {
+		case <-pollTicker.C:
+			go a.GetMetrics()
+			go a.GetGopsutilMetrics()
+			go a.IncreasePollCount()
+		case <-reportTicker.C:
+			go a.ParallelSendMetrics()
+		}
+	}
+}
+
+func (a *Agent) ParallelSendMetrics() {
+	metricsChan := make(chan metrics.Metrics, a.RateLimit)
+
+	a.mutex.Lock()
+
+	for name, value := range a.metrics {
+		var m metrics.Metrics
+		if name == "PollCount" {
+			m.MType = metrics.Counter
+			m.ID = name
+			delta := int64(value)
+			m.Delta = &delta
+		} else {
+			m.MType = metrics.Gauge
+			m.ID = name
+			m.Value = &value
+		}
+		metricsChan <- m
+	}
+	a.mutex.Unlock()
+
+	close(metricsChan)
+
+	var i int64 = 0
+	for ; i < a.RateLimit; i++ {
+		go a.sendByWorker(metricsChan)
+	}
+}
+
+func (a *Agent) sendByWorker(metricsChan <-chan metrics.Metrics) {
+	for m := range metricsChan {
+		err := a.sendSingleMetric(m)
+		if err != nil {
+			logger.Log.Error("failed to send single metric", zap.Error(err))
+		}
+	}
+}
+
+func (a *Agent) sendSingleMetric(metric metrics.Metrics) error {
+	jsonMetrics, err := json.Marshal(metric)
 	if err != nil {
-		logger.Log.Error("failed to marshal metrics", zap.Error(err))
+		logger.Log.Error("failed to marshal metric", zap.String("metric", fmt.Sprintf("%+v", metric)), zap.Error(err))
 		return err
 	}
 
@@ -119,7 +179,7 @@ func (a *Agent) SendMetricsByBatch() error {
 	}
 
 	if _, err := gz.Write(jsonMetrics); err != nil {
-		logger.Log.Error("failed to compress metric", zap.Error(err))
+		logger.Log.Error("failed to compress metric", zap.String("metric", fmt.Sprintf("%+v", metric)), zap.Error(err))
 		return err
 	}
 
@@ -128,104 +188,17 @@ func (a *Agent) SendMetricsByBatch() error {
 		return err
 	}
 	gz.Close()
-
 	err = retry.Retry(func() error {
-		return a.sendBatchMetrics(b)
+		return a.sendRequest(b)
 	})
-
 	if err != nil {
-		logger.Log.Error("failed to send metrics", zap.Error(err))
+		logger.Log.Error("failed to send metric", zap.String("metric", fmt.Sprintf("%+v", metric)), zap.Error(err))
 		return err
 	}
 	return nil
 }
 
-func (a *Agent) sendBatchMetrics(b bytes.Buffer) error {
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s:%d/updates", a.ServerAddress, a.ServerPort), &b)
-	if err != nil {
-		logger.Log.Error("failed to create request", zap.Error(err))
-		return err
-	}
-
-	req.Header.Set("Content-Encoding", "gzip")
-	req.Header.Set("Content-Type", "application/json")
-
-	if a.HashKey != "" {
-		hash := crypto.CalculateHash([]byte(a.HashKey), b.Bytes())
-		req.Header.Set("HashSHA256", hash)
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		logger.Log.Error("failed to send request", zap.Error(err))
-		return retry.ErrorConnection
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 500 && resp.StatusCode <= 504 {
-		logger.Log.Error("received retriable status code", zap.Int("status_code", resp.StatusCode))
-		return retry.ErrorServer
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		logger.Log.Error("received non retriable status code", zap.Int("status_code", resp.StatusCode))
-		return retry.ErrorNonRetriable
-	}
-	return nil
-}
-
-func (a *Agent) SendMetrics() error {
-	for name, value := range a.metrics {
-		var metric metrics.Metrics
-
-		if name == "PollCount" {
-			metric.MType = metrics.Counter
-			metric.ID = name
-			delta := int64(value)
-			metric.Delta = &delta
-		} else {
-			metric.MType = metrics.Gauge
-			metric.ID = name
-			value := float64(value)
-			metric.Value = &value
-		}
-		logger.Log.Info("preparing to use metric", zap.Any("metric", metric))
-
-		jsonMetrics, err := json.Marshal(metric)
-		if err != nil {
-			logger.Log.Error("failed to marshal metric", zap.String("metric", fmt.Sprintf("%+v", metric)), zap.Error(err))
-			return err
-		}
-
-		var b bytes.Buffer
-		gz, err := gzip.NewWriterLevel(&b, gzip.BestCompression)
-		if err != nil {
-			logger.Log.Error("failed to create gzip writer", zap.Error(err))
-			return err
-		}
-
-		if _, err := gz.Write(jsonMetrics); err != nil {
-			logger.Log.Error("failed to compress metric", zap.String("metric", fmt.Sprintf("%+v", metric)), zap.Error(err))
-			return err
-		}
-
-		if err := gz.Flush(); err != nil {
-			logger.Log.Error("failed to flush compressed data", zap.Error(err))
-			return err
-		}
-		gz.Close()
-
-		err = retry.Retry(func() error {
-			return a.sendSingleMetric(b)
-		})
-		if err != nil {
-			logger.Log.Error("failed to send metric", zap.String("metric", fmt.Sprintf("%+v", metric)), zap.Error(err))
-			return err
-		}
-	}
-	return nil
-}
-
-func (a *Agent) sendSingleMetric(b bytes.Buffer) error {
+func (a *Agent) sendRequest(b bytes.Buffer) error {
 	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s:%d/update", a.ServerAddress, a.ServerPort), &b)
 	if err != nil {
 		logger.Log.Error("failed to create request", zap.Error(err))
@@ -234,6 +207,7 @@ func (a *Agent) sendSingleMetric(b bytes.Buffer) error {
 
 	req.Header.Set("Content-Encoding", "gzip")
 	req.Header.Set("Content-Type", "application/json")
+
 	if a.HashKey != "" {
 		hash := crypto.CalculateHash([]byte(a.HashKey), b.Bytes())
 		req.Header.Set("HashSHA256", hash)
@@ -252,22 +226,4 @@ func (a *Agent) sendSingleMetric(b bytes.Buffer) error {
 	}
 
 	return nil
-}
-
-func (a *Agent) Run() {
-	logger.Log.Info("agent running")
-	pollTicker := time.NewTicker(a.PollInterval)
-	reportTicker := time.NewTicker(a.ReportSendInterval)
-
-	for {
-		select {
-		case <-pollTicker.C:
-			a.GetMetrics()
-		case <-reportTicker.C:
-			err := a.SendMetricsByBatch()
-			if err != nil {
-				logger.Log.Error("failed to send metrics", zap.Error(err))
-			}
-		}
-	}
 }
