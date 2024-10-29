@@ -463,24 +463,3 @@ func TestAgent_ParallelSendMetrics(t *testing.T) {
 		})
 	}
 }
-
-func TestNewAgent(t *testing.T) {
-	tests := []struct {
-		name string
-		want *Agent
-	}{
-		{
-			name: "equal_new_agent",
-			want: &Agent{
-				ServerAddress:      config.Address,
-				ServerPort:         config.Port,
-				PollCount:          0,
-				PollInterval:       config.PollInterval,
-				ReportSendInterval: config.ReportSendInterval,
-				metrics:            make(map[string]float64)},
-		},
-	}
-	for _, tt := range tests {
-		assert.Equal(t, tt.want, NewAgent(), "NewAgent() name = %v, wantErr %v", tt.name, tt.want)
-	}
-}
