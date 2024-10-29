@@ -1,8 +1,6 @@
 package agent
 
 import (
-	"github.com/FollowLille/metrics/internal/config"
-	"github.com/stretchr/testify/mock"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -10,6 +8,9 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+
+	"github.com/FollowLille/metrics/internal/config"
 )
 
 func TestAgent_ChangeAddress(t *testing.T) {
