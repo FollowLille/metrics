@@ -3,7 +3,6 @@ package agent
 import (
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
 	"time"
 
@@ -422,7 +421,6 @@ func TestAgent_ParallelSendMetrics(t *testing.T) {
 		PollInterval       time.Duration
 		ReportSendInterval time.Duration
 		metrics            map[string]float64
-		mutex              sync.Mutex
 	}
 
 	server := new(mocks)
