@@ -2,13 +2,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/FollowLille/metrics/internal/logger"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/FollowLille/metrics/internal/agent"
+	"github.com/FollowLille/metrics/internal/logger"
 )
 
 func main() {
@@ -22,7 +22,7 @@ func main() {
 	a.Run()
 }
 
-func Init(flags string) agent.Agent {
+func Init(flags string) *agent.Agent {
 	splitedAddress := strings.Split(flags, ":")
 	if len(splitedAddress) != 2 {
 		fmt.Printf("invalid address %s, expected host:port", flags)
@@ -35,10 +35,13 @@ func Init(flags string) agent.Agent {
 		os.Exit(1)
 	}
 
-	a := agent.Agent{}
+	a := agent.NewAgent()
 	a.ServerAddress = serverAddress
 	a.ServerPort = serverPort
+	a.HashKey = flagHashKey
 	a.PollInterval = time.Duration(flagPollInterval) * time.Second
 	a.ReportSendInterval = time.Duration(flagReportInterval) * time.Second
+	a.RateLimit = flagRateLimit
+
 	return a
 }

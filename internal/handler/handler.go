@@ -46,7 +46,8 @@ func HomeHandler(c *gin.Context, s *storage.MemStorage) {
 
 	if strings.Contains(c.GetHeader("Accept-Encoding"), "gzip") {
 		c.Header("Content-Encoding", "gzip")
-		gz := compress.NewCompressWriter(c.Writer)
+		wr := compress.NewResponseWriter(c.Writer)
+		gz := compress.NewCompressWriter(wr)
 		defer gz.Close()
 		c.Writer = gz
 	}
@@ -68,7 +69,7 @@ func UpdateHandler(c *gin.Context, storage *storage.MemStorage) {
 		return
 	}
 	switch metricType {
-	case "counter":
+	case metrics.Counter:
 		value, err := strconv.ParseInt(metricValue, 10, 64)
 		if err != nil {
 			c.String(http.StatusBadRequest, "metric value must be integer")
@@ -94,14 +95,14 @@ func GetValueHandler(c *gin.Context, storage *storage.MemStorage) {
 	metricName := c.Param("name")
 
 	switch metricType {
-	case "counter":
+	case metrics.Counter:
 		value, exists := storage.GetCounter(metricName)
 		if !exists {
 			c.String(http.StatusNotFound, "counter with name "+metricName+" not found")
 			return
 		}
 		c.String(http.StatusOK, fmt.Sprintf("%d", value))
-	case "gauge":
+	case metrics.Gauge:
 		value, exists := storage.GetGauge(metricName)
 		if !exists {
 			c.String(http.StatusNotFound, "gauge with name "+metricName+" not found")
@@ -199,7 +200,7 @@ func UpdatesByJSON(c *gin.Context, storage *storage.MemStorage) {
 
 	for _, metric := range metricsBatch {
 		switch metric.MType {
-		case "counter":
+		case metrics.Counter:
 			name, value := metric.ID, metric.Delta
 			if value == nil {
 				c.String(http.StatusBadRequest, "counter value is empty")
@@ -207,7 +208,7 @@ func UpdatesByJSON(c *gin.Context, storage *storage.MemStorage) {
 			}
 			storage.UpdateCounter(name, *value)
 			logger.Log.Info("counter updated", zap.String("counter_name", name), zap.Int64("counter_value", *value))
-		case "gauge":
+		case metrics.Gauge:
 			name, value := metric.ID, metric.Value
 			if value == nil {
 				c.String(http.StatusBadRequest, "gauge value is empty")
@@ -249,22 +250,25 @@ func GetValueByJSON(c *gin.Context, storage *storage.MemStorage) {
 		c.String(http.StatusBadRequest, "invalid json")
 		return
 	}
-
+	logger.Log.Info("received metric", zap.Any("metric", metric))
 	name := metric.ID
 	switch metric.MType {
-	case "counter":
+	case metrics.Counter:
 		value, exists := storage.GetCounter(name)
+		logger.Log.Info("counter value", zap.String("counter_name", name), zap.Int64("counter_value", value))
 		if !exists {
 			c.String(http.StatusNotFound, "counter with name "+name+" not found")
 			logger.Log.Info("counter not found", zap.String("counter_name", name))
 			return
 		}
+
 		metric.Delta = &value
 		c.JSON(http.StatusOK, metric)
 		logger.Log.Info("counter value", zap.String("counter_name", name), zap.Int64("counter_value", value))
-	case "gauge":
+	case metrics.Gauge:
 		name := metric.ID
 		value, exists := storage.GetGauge(name)
+		logger.Log.Info("gauge value", zap.String("gauge_name", name), zap.Float64("gauge_value", value))
 		if !exists {
 			c.String(http.StatusNotFound, "gauge with name "+name+" not found")
 			logger.Log.Info("gauge not found", zap.String("gauge_name", name))
@@ -272,7 +276,6 @@ func GetValueByJSON(c *gin.Context, storage *storage.MemStorage) {
 		}
 		metric.Value = &value
 		c.JSON(http.StatusOK, metric)
-		logger.Log.Info("gauge value", zap.String("gauge_name", name), zap.Float64("gauge_value", value))
 	default:
 		c.String(http.StatusBadRequest, "invalid metric type, must be counter or gauge")
 		logger.Log.Info("invalid metric type", zap.String("metric_type", metric.MType))

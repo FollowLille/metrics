@@ -9,7 +9,7 @@ const (
 	ReportSendInterval = 10 * time.Second
 	Address            = "localhost"
 	Port               = 8080
-	ContentType        = "text/plain"
+	RateLimit          = 1
 )
 
 var DatabaseRetryDelays = []time.Duration{

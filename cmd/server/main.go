@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"github.com/FollowLille/metrics/internal/crypto"
 	"os"
 	"strconv"
 	"strings"
@@ -36,6 +37,9 @@ func main() {
 	// Инициализация обработчиков
 	router.Use(logger.RequestLogger()).Use(logger.ResponseLogger())
 
+	// Инициализация хэша
+	router.Use(crypto.HashMiddleware([]byte(flagHashKey)))
+
 	// Инициализация сжатия
 	router.Use(compress.GzipMiddleware()).Use(compress.GzipResponseMiddleware())
 
@@ -49,8 +53,12 @@ func main() {
 		handler.PingHandler(c, flagDatabaseAddress)
 	})
 
-	// Обработчик обновлений
-	router.POST("/update", func(c *gin.Context) {
+	// Обработчики обновлений
+	router.POST("/update/:type/:name/:value", func(c *gin.Context) {
+		handler.UpdateHandler(c, metricsStorage)
+	})
+
+	router.POST("/update/", func(c *gin.Context) {
 		handler.UpdateByBodyHandler(c, metricsStorage)
 	})
 
@@ -58,12 +66,9 @@ func main() {
 		handler.UpdatesByBodyHandler(c, metricsStorage)
 	})
 
-	router.POST("/update/:type/:name/:value", func(c *gin.Context) {
-		handler.UpdateHandler(c, metricsStorage)
-	})
-
 	// Обработчик получения метрик
-	router.POST("/value", func(c *gin.Context) {
+
+	router.POST("/value/", func(c *gin.Context) {
 		handler.GetValueByBodyHandler(c, metricsStorage)
 	})
 
@@ -83,13 +88,13 @@ func main() {
 
 func Run(s server.Server, r *gin.Engine, str *storage.MemStorage) error {
 	addr := fmt.Sprintf("%s:%d", s.Address, s.Port)
-	fmt.Printf("server running on: %s", addr)
+	logger.Log.Info("starting server", zap.String("address", addr))
 	var err error
 	stopChan := make(chan struct{})
 
 	switch flagStorePlace {
 	case "file":
-		fmt.Println("Store place: file")
+		logger.Log.Info("loading metrics from file")
 		str, file, err := loadMetricsFromFile(str)
 		if err != nil {
 			return err
@@ -98,7 +103,7 @@ func Run(s server.Server, r *gin.Engine, str *storage.MemStorage) error {
 
 		go runPeriodicFileSaver(str, file, stopChan)
 	case "database":
-		fmt.Println("Store place: database")
+		logger.Log.Info("loading metrics from database")
 		database.InitDB(flagDatabaseAddress)
 		database.PrepareDB()
 
@@ -107,11 +112,11 @@ func Run(s server.Server, r *gin.Engine, str *storage.MemStorage) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println("Loaded metrics from database")
+		logger.Log.Info("metrics loaded from database")
 
 		go runPeriodicDatabaseSaver(db, stopChan, str)
 	default:
-		fmt.Println("Store place was not set. Result will be stored in memory.")
+		logger.Log.Info("metrics will be stored in memory")
 	}
 
 	err = r.Run(addr)
@@ -172,12 +177,12 @@ func runPeriodicFileSaver(str *storage.MemStorage, file *os.File, stopChan chan 
 	for {
 		select {
 		case <-ticker.C:
-			fmt.Println("Save metrics to file")
+			logger.Log.Info("saving metrics to file")
 			if err := str.SaveMetricsToFile(file); err != nil {
 				logger.Log.Error("can't save metrics to file", zap.Error(err))
 			}
 		case <-stopChan:
-			fmt.Println("stop ticker")
+			logger.Log.Info("stop ticker")
 			return
 		}
 	}
@@ -188,12 +193,12 @@ func runPeriodicDatabaseSaver(db *sql.DB, stopChan chan struct{}, str *storage.M
 	for {
 		select {
 		case <-ticker.C:
-			fmt.Println("Save metrics to database")
+			logger.Log.Info("saving metrics to database")
 			if err := database.SaveMetricsToDatabase(db, str); err != nil {
 				logger.Log.Error("can't save metrics to database", zap.Error(err))
 			}
 		case <-stopChan:
-			fmt.Println("stop ticker")
+			logger.Log.Info("stop ticker")
 			return
 		}
 	}

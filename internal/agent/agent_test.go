@@ -1,11 +1,15 @@
 package agent
 
 import (
-	"github.com/FollowLille/metrics/internal/config"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+
+	"github.com/FollowLille/metrics/internal/config"
 )
 
 func TestAgent_ChangeAddress(t *testing.T) {
@@ -318,7 +322,7 @@ func TestAgent_GetMetrics(t *testing.T) {
 	}
 }
 
-func TestAgent_SendMetrics(t *testing.T) {
+func TestAgent_GetGopsutilMetrics(t *testing.T) {
 	type fields struct {
 		ServerAddress      string
 		ServerPort         int64
@@ -328,12 +332,11 @@ func TestAgent_SendMetrics(t *testing.T) {
 		metrics            map[string]float64
 	}
 	tests := []struct {
-		name    string
-		fields  fields
-		wantErr bool
+		name   string
+		fields fields
 	}{
 		{
-			name: "send_metrics",
+			name: "not_empty_metrics",
 			fields: fields{
 				ServerAddress:      config.Address,
 				ServerPort:         config.Port,
@@ -342,10 +345,8 @@ func TestAgent_SendMetrics(t *testing.T) {
 				ReportSendInterval: config.ReportSendInterval,
 				metrics:            make(map[string]float64),
 			},
-			wantErr: false,
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := &Agent{
@@ -356,32 +357,106 @@ func TestAgent_SendMetrics(t *testing.T) {
 				ReportSendInterval: tt.fields.ReportSendInterval,
 				metrics:            tt.fields.metrics,
 			}
-			err := a.SendMetrics()
-			if tt.wantErr {
-				assert.Error(t, a.SendMetrics(), "Agent.SendMetrics() name = %v, error = %v, wantErr %v", tt.name, err, tt.wantErr)
-			} else {
-				assert.NoError(t, err, "Agent.SendMetrics() name = %v, error = %v, wantErr %v", tt.name, err, tt.wantErr)
-			}
+			a.GetGopsutilMetrics()
+			assert.NotEmpty(t, a.metrics, "Agent.GetGopsutilMetrics() is empty")
 		})
 	}
 }
-func TestNewAgent(t *testing.T) {
+
+func TestAgent_IncreasePollCount(t *testing.T) {
+	type fields struct {
+		ServerAddress      string
+		ServerPort         int64
+		PollCount          int64
+		PollInterval       time.Duration
+		ReportSendInterval time.Duration
+		metrics            map[string]float64
+	}
 	tests := []struct {
-		name string
-		want *Agent
+		name   string
+		fields fields
 	}{
 		{
-			name: "equal_new_agent",
-			want: &Agent{
+			name: "increase_poll_count",
+			fields: fields{
 				ServerAddress:      config.Address,
 				ServerPort:         config.Port,
 				PollCount:          0,
 				PollInterval:       config.PollInterval,
 				ReportSendInterval: config.ReportSendInterval,
-				metrics:            make(map[string]float64)},
+				metrics:            make(map[string]float64),
+			},
 		},
 	}
 	for _, tt := range tests {
-		assert.Equal(t, tt.want, NewAgent(), "NewAgent() name = %v, wantErr %v", tt.name, tt.want)
+		t.Run(tt.name, func(t *testing.T) {
+			a := &Agent{
+				ServerAddress:      tt.fields.ServerAddress,
+				ServerPort:         tt.fields.ServerPort,
+				PollCount:          tt.fields.PollCount,
+				PollInterval:       tt.fields.PollInterval,
+				ReportSendInterval: tt.fields.ReportSendInterval,
+				metrics:            tt.fields.metrics,
+			}
+			a.IncreasePollCount()
+			assert.Equal(t, int64(1), a.PollCount, "Agent.IncreasePollCount() name = %v, count = %v, want %v", tt.name, a.PollCount, 1)
+		})
+	}
+}
+
+type mocks struct {
+	mock.Mock
+}
+
+func (m *mocks) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	m.Called(w, r)
+	w.WriteHeader(http.StatusOK)
+}
+
+func TestAgent_ParallelSendMetrics(t *testing.T) {
+	type fields struct {
+		ServerAddress      string
+		ServerPort         int64
+		PollCount          int64
+		PollInterval       time.Duration
+		ReportSendInterval time.Duration
+		metrics            map[string]float64
+	}
+
+	server := new(mocks)
+	server.On("ServeHTTP", mock.Anything, mock.Anything).Return().Once()
+
+	ts := httptest.NewServer(server)
+	defer ts.Close()
+
+	tests := []struct {
+		name   string
+		fields fields
+	}{
+		{
+			name: "parallel_send_metrics",
+			fields: fields{
+				ServerAddress:      config.Address,
+				ServerPort:         config.Port,
+				PollCount:          0,
+				PollInterval:       config.PollInterval,
+				ReportSendInterval: config.ReportSendInterval,
+				metrics:            make(map[string]float64),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := &Agent{
+				ServerAddress:      tt.fields.ServerAddress,
+				ServerPort:         tt.fields.ServerPort,
+				PollCount:          tt.fields.PollCount,
+				PollInterval:       tt.fields.PollInterval,
+				ReportSendInterval: tt.fields.ReportSendInterval,
+				metrics:            tt.fields.metrics,
+			}
+			a.ParallelSendMetrics()
+			server.AssertNumberOfCalls(t, "ServeHTTP", int(a.RateLimit))
+		})
 	}
 }

@@ -1,10 +1,13 @@
 package main
 
 import (
-	"fmt"
-	"github.com/spf13/pflag"
+	"go.uber.org/zap"
 	"os"
 	"strconv"
+
+	"github.com/spf13/pflag"
+
+	"github.com/FollowLille/metrics/internal/logger"
 )
 
 var (
@@ -15,6 +18,7 @@ var (
 	flagRestoreStr      string
 	flagDatabaseAddress string
 	flagStorePlace      string
+	flagHashKey         string
 	flagRestore         bool
 )
 
@@ -25,6 +29,7 @@ func parseFlags() {
 	pflag.StringVarP(&flagFilePath, "file-path", "f", "", "file path")
 	pflag.StringVarP(&flagRestoreStr, "restore", "r", "true", "restore")
 	pflag.StringVarP(&flagDatabaseAddress, "database-address", "d", "", "database address")
+	pflag.StringVarP(&flagHashKey, "hash-key", "k", "", "hash key")
 
 	pflag.Parse()
 
@@ -39,7 +44,8 @@ func parseFlags() {
 	if envStoreInterval != "" {
 		storeInterval, err := strconv.ParseInt(envStoreInterval, 10, 64)
 		if err != nil {
-			fmt.Printf("invalid store interval: %s", envStoreInterval)
+			logger.Log.Error("Invalid store interval value", zap.Error(err))
+			os.Exit(1)
 		}
 		flagStoreInterval = storeInterval
 	}
@@ -56,6 +62,10 @@ func parseFlags() {
 		flagDatabaseAddress = envDatabaseAddress
 	}
 
+	if envHashKey := os.Getenv("KEY"); envHashKey != "" {
+		flagHashKey = envHashKey
+	}
+
 	if flagDatabaseAddress != "" {
 		flagStorePlace = "database"
 	} else if flagFilePath != "" {
@@ -67,15 +77,10 @@ func parseFlags() {
 	var err error
 	flagRestore, err = strconv.ParseBool(flagRestoreStr)
 	if err != nil {
-		fmt.Printf("invalid restore value: %s", flagRestoreStr)
+		logger.Log.Error("Invalid restore value", zap.Error(err))
 		os.Exit(1)
 	}
 
-	fmt.Println("Flags:", flagAddress, flagLevel, flagStoreInterval, flagFilePath, flagRestore, flagDatabaseAddress)
-	fmt.Println("Address: ", flagAddress)
-	fmt.Println("Log level: ", flagLevel)
-	fmt.Println("Store interval: ", flagStoreInterval)
-	fmt.Println("File path: ", flagFilePath)
-	fmt.Println("Restore: ", flagRestore)
-	fmt.Println("Database address: ", flagDatabaseAddress)
+	logger.Log.Info("Flags", zap.Int64("store-interval", flagStoreInterval), zap.String("hash-key", flagHashKey), zap.String("address", flagAddress), zap.String("level", flagLevel), zap.String("file-path", flagFilePath), zap.String("restore", flagRestoreStr))
+
 }
