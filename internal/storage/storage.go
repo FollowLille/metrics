@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	_ "github.com/lib/pq"
 	"os"
+	"sync"
+
+	_ "github.com/lib/pq"
 
 	"github.com/FollowLille/metrics/internal/metrics"
 )
@@ -13,20 +15,26 @@ import (
 type MemStorage struct {
 	gauges   map[string]float64
 	counters map[string]int64
+	muGauges sync.RWMutex
 }
 
 func NewMemStorage() *MemStorage {
 	return &MemStorage{
 		gauges:   make(map[string]float64),
 		counters: make(map[string]int64),
+		muGauges: sync.RWMutex{},
 	}
 }
 
 func (s *MemStorage) UpdateGauge(name string, value float64) {
+	s.muGauges.Lock()
+	defer s.muGauges.Unlock()
 	s.gauges[name] = value
 }
 
 func (s *MemStorage) GetGauge(name string) (float64, bool) {
+	s.muGauges.RLock()
+	defer s.muGauges.RUnlock()
 	value, exists := s.gauges[name]
 	return value, exists
 }
