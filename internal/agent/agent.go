@@ -132,7 +132,6 @@ func (a *Agent) ParallelSendMetrics() {
 	metricsChan := make(chan metrics.Metrics)
 
 	for i := int64(0); i < a.RateLimit; i++ {
-		logger.Log.Info("create worker", zap.Int64("count", i))
 		go a.sendByWorker(metricsChan)
 	}
 	a.mutex.Lock()
