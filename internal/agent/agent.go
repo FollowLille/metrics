@@ -105,6 +105,7 @@ func (a *Agent) IncreasePollCount() {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 	a.PollCount++
+	a.metrics["PollCount"] = float64(a.PollCount)
 }
 
 func (a *Agent) Run() {
