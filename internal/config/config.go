@@ -6,7 +6,7 @@ import (
 
 const (
 	PollInterval       = 2 * time.Second
-	ReportSendInterval = 10 * time.Second
+	ReportSendInterval = 5 * time.Second
 	Address            = "localhost"
 	Port               = 8080
 	RateLimit          = 10
