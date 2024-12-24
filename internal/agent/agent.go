@@ -105,7 +105,6 @@ func (a *Agent) IncreasePollCount() {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 	a.PollCount++
-	a.metrics["PollCount"] = float64(a.PollCount)
 }
 
 func (a *Agent) Run() {
@@ -123,7 +122,6 @@ func (a *Agent) Run() {
 			go a.GetGopsutilMetrics()
 			go a.IncreasePollCount()
 		case <-reportTicker.C:
-			logger.Log.Info("sent metrics", zap.Int64("count", a.PollCount))
 			go a.ParallelSendMetrics()
 		}
 	}
@@ -136,20 +134,20 @@ func (a *Agent) ParallelSendMetrics() {
 		go a.sendByWorker(metricsChan)
 	}
 	a.mutex.Lock()
+
+	var m metrics.Metrics
 	for name, value := range a.metrics {
-		var m metrics.Metrics
-		if name == "PollCount" {
-			m.MType = metrics.Counter
-			m.ID = name
-			delta := int64(value)
-			m.Delta = &delta
-		} else {
-			m.MType = metrics.Gauge
-			m.ID = name
-			m.Value = &value
-		}
+		m.MType = metrics.Gauge
+		m.ID = name
+		m.Value = &value
 		metricsChan <- m
 	}
+	m.MType = metrics.Counter
+	m.ID = "PollCount"
+	delta := a.PollCount
+	m.Delta = &delta
+	metricsChan <- m
+
 	a.mutex.Unlock()
 
 	close(metricsChan)
