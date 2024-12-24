@@ -21,9 +21,15 @@ type compressWriter struct {
 }
 
 func NewCompressWriter(w *responseWriter) *compressWriter {
+	zw, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
+	if err != nil {
+		logger.Log.Error("failed to create gzip writer", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return nil
+	}
 	return &compressWriter{
 		responseWriter: w,
-		zw:             gzip.NewWriter(w),
+		zw:             zw,
 	}
 }
 
