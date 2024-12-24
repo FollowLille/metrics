@@ -128,7 +128,7 @@ func (a *Agent) Run() {
 }
 
 func (a *Agent) ParallelSendMetrics() {
-	metricsChan := make(chan metrics.Metrics)
+	metricsChan := make(chan metrics.Metrics, 30)
 
 	for i := int64(0); i < a.RateLimit; i++ {
 		go a.sendByWorker(metricsChan)
