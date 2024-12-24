@@ -109,6 +109,7 @@ func (a *Agent) IncreasePollCount() {
 
 func (a *Agent) Run() {
 	logger.Log.Info("agent running")
+	logger.Log.Info("Intervals: ", zap.String("poll", a.PollInterval.String()), zap.String("report", a.ReportSendInterval.String()))
 	pollTicker := time.NewTicker(a.PollInterval)
 	reportTicker := time.NewTicker(a.ReportSendInterval)
 	defer pollTicker.Stop()
@@ -121,12 +122,14 @@ func (a *Agent) Run() {
 			go a.GetGopsutilMetrics()
 			go a.IncreasePollCount()
 		case <-reportTicker.C:
+			logger.Log.Info("sent metrics", zap.Int64("count", a.PollCount))
 			go a.ParallelSendMetrics()
 		}
 	}
 }
 
 func (a *Agent) ParallelSendMetrics() {
+	logger.Log.Info("parallel send metrics")
 	metricsChan := make(chan metrics.Metrics, a.RateLimit)
 
 	a.mutex.Lock()
