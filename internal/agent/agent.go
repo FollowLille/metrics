@@ -129,11 +129,13 @@ func (a *Agent) Run() {
 }
 
 func (a *Agent) ParallelSendMetrics() {
-	logger.Log.Info("parallel send metrics")
-	metricsChan := make(chan metrics.Metrics, a.RateLimit)
+	metricsChan := make(chan metrics.Metrics)
 
+	for i := int64(0); i < a.RateLimit; i++ {
+		logger.Log.Info("create worker", zap.Int64("count", i))
+		go a.sendByWorker(metricsChan)
+	}
 	a.mutex.Lock()
-
 	for name, value := range a.metrics {
 		var m metrics.Metrics
 		if name == "PollCount" {
@@ -151,11 +153,6 @@ func (a *Agent) ParallelSendMetrics() {
 	a.mutex.Unlock()
 
 	close(metricsChan)
-
-	var i int64 = 0
-	for ; i < a.RateLimit; i++ {
-		go a.sendByWorker(metricsChan)
-	}
 }
 
 func (a *Agent) sendByWorker(metricsChan <-chan metrics.Metrics) {
