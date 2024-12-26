@@ -1,3 +1,4 @@
+// Package config содержит конфигурацию приложения
 package config
 
 import (
@@ -5,13 +6,14 @@ import (
 )
 
 const (
-	PollInterval       = 2 * time.Second
-	ReportSendInterval = 10 * time.Second
-	Address            = "localhost"
-	Port               = 8080
-	RateLimit          = 3
+	PollInterval       = 2 * time.Second  // интервал опроса метрик
+	ReportSendInterval = 10 * time.Second // интервал отправки метрик
+	Address            = "localhost"      // адрес для прослушивания
+	Port               = 8080             // порт для прослушивания
+	RateLimit          = 3                // лимит на кол-во одновременных воркеров
 )
 
+// DatabaseRetryDelays - задержки между повторными попытками подключения к базе данных
 var DatabaseRetryDelays = []time.Duration{
 	1 * time.Second,
 	3 * time.Second,

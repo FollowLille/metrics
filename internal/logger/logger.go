@@ -1,3 +1,4 @@
+// Package logger содержит функции для логирования
 package logger
 
 import (
@@ -11,7 +12,14 @@ import (
 
 var Log = zap.NewNop()
 
-// Инициализация логгера
+// Initialize инициализирует логгер
+// Принимает уровень логирования и возвращает ошибку, если она возникла
+//
+// Параметры:
+//   - level - уровень логирования
+//
+// Возвращаемое значение:
+//   - error - ошибка
 func Initialize(level string) error {
 	lvl, err := zap.ParseAtomicLevel(level)
 	if err != nil {
@@ -27,7 +35,13 @@ func Initialize(level string) error {
 	return nil
 }
 
-// Логирование запроса
+// RequestLogger логирует запросы
+// В лог попадают следующие параметры:
+//   - method - метод
+//   - path - путь
+//   - duration - время выполнения
+//   - body - тело запроса
+//   - headers - заголовки запроса
 func RequestLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
@@ -58,7 +72,12 @@ func RequestLogger() gin.HandlerFunc {
 	}
 }
 
-// Логирование ответа
+// ResponseLogger логирует ответы
+// В лог попадают следующие параметры:
+//   - status - статус
+//   - response_size - размер ответа
+//   - body - тело ответа
+//   - headers - заголовки
 func ResponseLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next()

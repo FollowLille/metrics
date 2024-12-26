@@ -1,20 +1,27 @@
+// Package database содержит функции для работы с базой данных
 package database
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/FollowLille/metrics/internal/retry"
 	"log"
 	"time"
 
-	"github.com/FollowLille/metrics/internal/logger"
-	"github.com/FollowLille/metrics/internal/storage"
 	"go.uber.org/zap"
+
+	"github.com/FollowLille/metrics/internal/logger"
+	"github.com/FollowLille/metrics/internal/retry"
+	"github.com/FollowLille/metrics/internal/storage"
 )
 
 var DB *sql.DB
 
+// InitDB инициализирует соединение с базой данных
+// Принимает строку подключения к базе данных
+//
+// Параметры:
+//   - connStr - строка подключения к базе данных
 func InitDB(connStr string) {
 	var err error
 	DB, err = sql.Open("postgres", connStr)
@@ -32,6 +39,7 @@ func InitDB(connStr string) {
 	log.Println("Successfully connected to the database")
 }
 
+// PrepareDB создает схему и таблицу для хранения метрик
 func PrepareDB() {
 	_, err := DB.Exec("CREATE SCHEMA IF NOT EXISTS metrics")
 	if err != nil {
@@ -45,6 +53,15 @@ func PrepareDB() {
 	}
 }
 
+// SaveMetricsToDatabase сохраняет метрики в базу данных
+// Принимает хранилище метрик и возвращает ошибку, если она возникнет
+//
+// Параметры:
+//   - db - соединение с базой данных
+//   - s - хранилище метрик
+//
+// Возвращаемое значение:
+//   - error
 func SaveMetricsToDatabase(db *sql.DB, s *storage.MemStorage) error {
 	gauge := s.GetAllGauges()
 	counter := s.GetAllCounters()
@@ -96,6 +113,15 @@ func SaveMetricsToDatabase(db *sql.DB, s *storage.MemStorage) error {
 	return nil
 }
 
+// LoadMetricsFromDatabase загружает метрики из базы данных
+// Принимает хранилище метрик и возвращает ошибку, если она возникнет
+//
+// Параметры:
+//   - str - хранилище метрик
+//   - db - соединение с базой данных
+//
+// Возвращаемое значение:
+//   - error
 func LoadMetricsFromDatabase(str *storage.MemStorage, db *sql.DB) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -164,6 +190,18 @@ type ExecContexter interface {
 	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 }
 
+// ExecQueryWithRetry выполняет запрос с повторным выполнением в случае возникновения ошибки
+// Принимает контекст, хранилище метрик, запрос и аргументы запроса
+// Возвращает ошибку, если она возникнет
+//
+// Параметры:
+//   - ctx - контекст
+//   - exec - интерфейс для записи\чтения из базы данных
+//   - query - запрос
+//   - agrs - аргументы запроса
+//
+// Возвращаемое значение:
+//   - error
 func ExecQueryWithRetry(ctx context.Context, exec ExecContexter, query string, agrs ...interface{}) error {
 	err := retry.Retry(func() error {
 		_, execErr := exec.ExecContext(ctx, query, agrs...)
@@ -187,6 +225,18 @@ func ExecQueryWithRetry(ctx context.Context, exec ExecContexter, query string, a
 	return nil
 }
 
+// QueryRowWithRetry выполняет запрос с повторным выполнением в случае возникновения ошибки
+// Принимает контекст, хранилище метрик, запрос и аргументы запроса
+// Возвращает ошибку, если она возникнет
+//
+// Параметры:
+//   - ctx - контекст
+//   - db - интерфейс для записи\чтения из базы данных
+//   - query - запрос
+//   - dest - аргументы запроса
+//
+// Возвращаемое значение:
+//   - error
 func QueryRowWithRetry(ctx context.Context, db *sql.DB, query string, dest ...interface{}) error {
 	err := retry.Retry(func() error {
 		row := db.QueryRowContext(ctx, query)
@@ -210,6 +260,19 @@ func QueryRowWithRetry(ctx context.Context, db *sql.DB, query string, dest ...in
 	return nil
 }
 
+// QueryRowsWithRetry выполняет запрос с повторным выполнением в случае возникновения ошибки
+// Принимает контекст, хранилище метрик, запрос и аргументы запроса
+// Возвращает ошибку, если она возникнет
+//
+// Параметры:
+//   - ctx - контекст
+//   - db - интерфейс для записи\чтения из базы данных
+//   - query - запрос
+//   - args - аргументы запроса
+//
+// Возвращаемое значение:
+//   - *sql.Rows - результаты запросы из базы данных
+//   - error - ошибка
 func QueryRowsWithRetry(ctx context.Context, db *sql.DB, query string, args ...interface{}) (*sql.Rows, error) {
 	var rows *sql.Rows
 	var err error

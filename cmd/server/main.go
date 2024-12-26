@@ -1,3 +1,6 @@
+// Package main отвечает за запуск сервера
+// Он включает в себя функции для парсинга командных флагов и переменных окружения,
+// а также настройку логгирования.
 package main
 
 import (
@@ -23,7 +26,6 @@ import (
 )
 
 func main() {
-	// Инициализация хранилища и логгера
 	parseFlags()
 	metricsStorage := storage.NewMemStorage()
 
@@ -41,16 +43,22 @@ func main() {
 		}
 	}()
 
-	// Инициализация роутера
 	router := setupRouter(metricsStorage)
 
-	// Создание и запуск сервера
 	s := initializeServer(flagAddress)
 	if err := runServer(s, router, metricsStorage); err != nil {
 		panic(err)
 	}
 }
 
+// setupRouter инициализирует gin и настраивает маршруты
+// Принимает хранилище метрик и возвращает gin.Engine
+//
+// Параметры:
+//   - metricsStorage - хранилище метрик
+//
+// Возвращаемое значение:
+//   - *gin.Engine - инициализированный gin.Engine
 func setupRouter(metricsStorage *storage.MemStorage) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
@@ -90,6 +98,15 @@ func setupRouter(metricsStorage *storage.MemStorage) *gin.Engine {
 	return router
 }
 
+// initializeServer инициализирует сервер
+// Принимает адрес и порт сервера
+// Возвращает инициализированный сервер
+//
+// Параметры:
+//   - flags - адрес и порт сервера
+//
+// Возвращаемое значение:
+//   - server.Server - инициализированный сервер
 func initializeServer(flags string) server.Server {
 	splittedAddress := strings.Split(flags, ":")
 	if len(splittedAddress) != 2 {
@@ -110,6 +127,17 @@ func initializeServer(flags string) server.Server {
 	}
 }
 
+// runServer запускает сервер
+// Принимает сервер, gin.Engine и хранилище метрик
+// Запускает сервер
+//
+// Параметры:
+//   - s - сервер
+//   - r - gin.Engine
+//   - str - хранилище метрик
+//
+// Возвращаемое значение:
+//   - error - ошибка запуска сервера
 func runServer(s server.Server, r *gin.Engine, str *storage.MemStorage) error {
 	addr := fmt.Sprintf("%s:%d", s.Address, s.Port)
 	logger.Log.Info("starting server", zap.String("address", addr))
@@ -145,6 +173,16 @@ func runServer(s server.Server, r *gin.Engine, str *storage.MemStorage) error {
 	return r.Run(addr)
 }
 
+// loadMetricsFromFile загружает метрики из файла
+// Принимает хранилище метрик и возвращает хранилище метрик и файл
+//
+// Параметры:
+//   - str - хранилище метрик
+//
+// Возвращаемое значение:
+//   - *storage.MemStorage - хранилище метрик
+//   - *os.File - файл
+//   - error - ошибка загрузки метрик из файла
 func loadMetricsFromFile(str *storage.MemStorage) (*storage.MemStorage, *os.File, error) {
 	if err := os.MkdirAll(flagFilePath, 0755); err != nil {
 		logger.Log.Error("can't create directory", zap.Error(err))
@@ -166,6 +204,14 @@ func loadMetricsFromFile(str *storage.MemStorage) (*storage.MemStorage, *os.File
 	return str, file, nil
 }
 
+// runPeriodicFileSaver запускает периодическое сохранение метрик в файл
+// Принимает хранилище метрик и файл
+// Запускает периодическое сохранение метрик в файл
+//
+// Параметры:
+//   - str - хранилище метрик
+//   - file - файл
+//   - stopChan - канал остановки
 func runPeriodicFileSaver(str *storage.MemStorage, file *os.File, stopChan chan struct{}) {
 	ticker := time.NewTicker(time.Duration(flagStoreInterval) * time.Second)
 	defer ticker.Stop()
@@ -184,6 +230,14 @@ func runPeriodicFileSaver(str *storage.MemStorage, file *os.File, stopChan chan 
 	}
 }
 
+// runPeriodicDatabaseSaver запускает периодическое сохранение метрик в базу данных
+// Принимает базу данных и канал остановки
+// Запускает периодическое сохранение метрик в базу данных
+//
+// Параметры:
+//   - db - база данных
+//   - stopChan - канал остановки
+//   - str - хранилище метрик
 func runPeriodicDatabaseSaver(db *sql.DB, stopChan chan struct{}, str *storage.MemStorage) {
 	ticker := time.NewTicker(time.Duration(flagStoreInterval) * time.Second)
 	defer ticker.Stop()

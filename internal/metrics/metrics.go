@@ -1,3 +1,4 @@
+// Package metrics содержит функции для получения метрик
 package metrics
 
 import (
@@ -8,9 +9,13 @@ import (
 	"github.com/shirou/gopsutil/mem"
 )
 
-const Counter = "counter"
-const Gauge = "gauge"
+const Counter = "counter" // счетчик
+const Gauge = "gauge"     // метрики
 
+// GetRuntimeMetrics возвращает метрики процессора и памяти
+//
+// Возвращаемое значение:
+//   - метрики процессора и памяти
 func GetRuntimeMetrics() map[string]float64 {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
@@ -47,6 +52,10 @@ func GetRuntimeMetrics() map[string]float64 {
 	return metrics
 }
 
+// GetGopsutilMetrics возвращает метрики процессора и памяти через gopsutil
+//
+// Возвращаемое значение:
+//   - метрики процессора и памяти
 func GetGopsutilMetrics() map[string]float64 {
 	metrics := make(map[string]float64)
 

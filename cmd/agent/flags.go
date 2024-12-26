@@ -1,3 +1,5 @@
+// Package main для запуска агента
+// Данная часть содержит информацию об использемых флагах
 package main
 
 import (
@@ -12,12 +14,28 @@ import (
 	"github.com/FollowLille/metrics/internal/logger"
 )
 
-var flagAddress string
-var flagHashKey string
-var flagReportInterval int64
-var flagPollInterval int64
-var flagRateLimit int64
+// Флаги
+var (
+	flagAddress        string // адрес для прослушивания
+	flagHashKey        string // ключ хэша
+	flagPollInterval   int64  // интервал опроса
+	flagReportInterval int64  // интервал отчета
+	flagRateLimit      int64  // лимит на кол-во одновременных воркеров
+)
 
+// parseFlags парсит командные флаги и переменные окружения для настройки сервера.
+// Флаги включают адрес сервера, адрес базы данных, адрес системы начисления и уровень логирования.
+// Если переменные окружения определены, они имеют приоритет над значениями по умолчанию.
+//
+// Пример использования:
+//
+//			-address=127.0.0.1:8080
+//	     -hash-key=secret
+//			-report-interval=10
+//			-poll-interval=2
+//			-rate-limit=4
+//
+// После парсинга флагов, информация о них логируется с использованием zap.
 func parseFlags() error {
 	pflag.StringVarP(&flagAddress, "address", "a", "localhost:8080", "address")
 	pflag.StringVarP(&flagHashKey, "hash-key", "k", "", "hash key")
@@ -61,7 +79,13 @@ func parseFlags() error {
 		flagRateLimit = interval
 	}
 
-	logger.Log.Info("Flags", zap.String("address", flagAddress), zap.String("hash-key", flagHashKey), zap.Int64("report-interval", flagReportInterval), zap.Int64("poll-interval", flagPollInterval))
+	logger.Log.Info("Flags",
+		zap.String("address", flagAddress),
+		zap.String("hash-key", flagHashKey),
+		zap.Int64("report-interval", flagReportInterval),
+		zap.Int64("poll-interval", flagPollInterval),
+		zap.Int64("rate-limit", flagRateLimit),
+	)
 	return nil
 
 }
