@@ -1,3 +1,5 @@
+// Package compress реализует интерфейс http.ResponseWriter и позволяет прозрачно для сервера
+// сжимать передаваемые данные и выставлять правильные HTTP-заголовки
 package compress
 
 import (
@@ -20,21 +22,52 @@ type compressWriter struct {
 	zw *gzip.Writer
 }
 
+// NewCompressWriter создает новый gzip.Writer
+// Если произошла ошибка, то логируем ее и возвращаем nil
+// иначе возвращаем gzip.Writer
+//
+// Параметры:
+//   - w - http.ResponseWriter
+//
+// Возвращаемое значение:
+//   - *compressWriter
 func NewCompressWriter(w *responseWriter) *compressWriter {
+	zw, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
+	if err != nil {
+		logger.Log.Error("failed to create gzip writer", zap.Error(err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return nil
+	}
 	return &compressWriter{
 		responseWriter: w,
-		zw:             gzip.NewWriter(w),
+		zw:             zw,
 	}
 }
 
+// Header возвращает http.Header
+//
+// Возвращаемое значение:
+//   - http.Header
 func (c *compressWriter) Header() http.Header {
 	return c.responseWriter.Header()
 }
 
+// WriteHeader записывает код статуса в http.Header
+//
+// Параметры:
+//   - p массив символов
+//
+// Возвращаемое значение:
+//   - int
+//   - error
 func (c *compressWriter) Write(p []byte) (int, error) {
 	return c.zw.Write(p)
 }
 
+// WriteHeader записывает код статуса в http.Header
+//
+// Параметры:
+//   - statusCode int
 func (c *compressWriter) WriteHeader(statusCode int) {
 	if statusCode < 300 {
 		c.responseWriter.Header().Set("Content-Encoding", "gzip")
@@ -54,6 +87,16 @@ type compressReader struct {
 	zr *gzip.Reader
 }
 
+// NewCompressReader создает новый gzip.Reader
+// Если произошла ошибка, то логируем ее и возвращаем nil
+// иначе возвращаем gzip.Reader
+//
+// Параметры:
+//   - r io.ReadCloser
+//
+// Возвращаемое значение:
+//   - *compressReader
+//   - error
 func newCompressReader(r io.ReadCloser) (*compressReader, error) {
 	zr, err := gzip.NewReader(r)
 	if err != nil {
@@ -66,10 +109,22 @@ func newCompressReader(r io.ReadCloser) (*compressReader, error) {
 	}, nil
 }
 
+// Read декомпрессирует данные из буфера
+//
+// Параметры:
+//   - p []byte
+//
+// Возвращаемое значение:
+//   - int
+//   - error
 func (c compressReader) Read(p []byte) (n int, err error) {
 	return c.zr.Read(p)
 }
 
+// Close закрывает gzip.Reader и досылает все данные из буфера.
+//
+// Возвращаемое значение:
+//   - error
 func (c *compressReader) Close() error {
 	if err := c.r.Close(); err != nil {
 		return err
@@ -77,6 +132,8 @@ func (c *compressReader) Close() error {
 	return c.zr.Close()
 }
 
+// GzipMiddleware обрабатывает запросы
+// Если в заголовках в Content-Encoding содержится gzip, то создаем gzip.Writer и обрабатывает запрос.
 func GzipMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if strings.Contains(c.GetHeader("Content-Encoding"), "gzip") {
@@ -100,6 +157,9 @@ func GzipMiddleware() gin.HandlerFunc {
 	}
 }
 
+// GzipResponseMiddleware обрабатывает ответы
+// Если в заголовках в Accept-Encoding содержится gzip, то создаем gzip.Writer
+// и декомпрессируем тело ответа.
 func GzipResponseMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		w := c.Writer
@@ -121,11 +181,20 @@ func GzipResponseMiddleware() gin.HandlerFunc {
 	}
 }
 
+// responseWriter реализует интерфейс gin.ResponseWriter и позволяет прозрачно для сервера
+// записывать данные в буфер
 type responseWriter struct {
 	gin.ResponseWriter
 	body *bytes.Buffer
 }
 
+// NewResponseWriter создает новый responseWriter
+//
+// Параметры:
+//   - gin.ResponseWriter
+//
+// Возвращаемое значение:
+//   - *responseWriter
 func NewResponseWriter(w gin.ResponseWriter) *responseWriter {
 	return &responseWriter{
 		ResponseWriter: w,
@@ -133,6 +202,14 @@ func NewResponseWriter(w gin.ResponseWriter) *responseWriter {
 	}
 }
 
+// Write записывает данные в буфер
+//
+// Параметры:
+//   - p []byte
+//
+// Возвращаемое значение:
+//   - int
+//   - error
 func (w *responseWriter) Write(p []byte) (int, error) {
 	n, err := w.body.Write(p)
 	if err != nil {
@@ -141,6 +218,7 @@ func (w *responseWriter) Write(p []byte) (int, error) {
 	return w.ResponseWriter.Write(p)
 }
 
+// GetBody возвращает содержимое буфера
 func (w *responseWriter) GetBody() []byte {
 	return w.body.Bytes()
 }

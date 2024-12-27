@@ -1,3 +1,6 @@
+// Package main отвечает за инициализацию и запуск сервера
+// Он включает в себя функции для парсинга командных флагов и переменных окружения,
+// а также настройку логгирования.
 package main
 
 import (
@@ -11,15 +14,15 @@ import (
 )
 
 var (
-	flagStoreInterval   int64
-	flagAddress         string
-	flagLevel           string
-	flagFilePath        string
-	flagRestoreStr      string
-	flagDatabaseAddress string
-	flagStorePlace      string
-	flagHashKey         string
-	flagRestore         bool
+	flagStoreInterval   int64  // интервал хранения данных
+	flagAddress         string // адрес для прослушивания
+	flagLevel           string // уровень логирования
+	flagFilePath        string // путь к файлу логирования
+	flagRestoreStr      string // флаг восстановления
+	flagDatabaseAddress string // адрес базы данных
+	flagStorePlace      string // место хранения
+	flagHashKey         string // ключ хэша
+	flagRestore         bool   // флаг восстановления
 )
 
 func parseFlags() {
@@ -81,6 +84,12 @@ func parseFlags() {
 		os.Exit(1)
 	}
 
-	logger.Log.Info("Flags", zap.Int64("store-interval", flagStoreInterval), zap.String("hash-key", flagHashKey), zap.String("address", flagAddress), zap.String("level", flagLevel), zap.String("file-path", flagFilePath), zap.String("restore", flagRestoreStr))
-
+	logger.Log.Info("Flags",
+		zap.Int64("store-interval", flagStoreInterval),
+		zap.String("hash-key", flagHashKey),
+		zap.String("address", flagAddress),
+		zap.String("level", flagLevel),
+		zap.String("file-path", flagFilePath),
+		zap.String("restore", flagRestoreStr),
+	)
 }

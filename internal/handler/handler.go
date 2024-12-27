@@ -1,3 +1,4 @@
+// Package handler содержит функции для обработки HTTP-запросов
 package handler
 
 import (
@@ -21,6 +22,12 @@ import (
 	"github.com/FollowLille/metrics/internal/storage"
 )
 
+// HomeHandler обрабатывает GET-запрос на "/"
+// Принимает хранилище метрик и возвращает HTML-страницу
+//
+// Параметры:
+//   - c - gin.Context
+//   - s - хранилище метрик
 func HomeHandler(c *gin.Context, s *storage.MemStorage) {
 	// Получение всех метрик
 	gauges := s.GetAllGauges()
@@ -56,6 +63,12 @@ func HomeHandler(c *gin.Context, s *storage.MemStorage) {
 	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
 }
 
+// UpdateHandler обрабатывает PUT-запрос на "/update/{type}/{name}/{value}"
+// Принимает хранилище метрик и обновляет значение метрики
+//
+// Параметры:
+//   - c - gin.Context
+//   - storage - хранилище метрик
 func UpdateHandler(c *gin.Context, storage *storage.MemStorage) {
 	metricType := c.Param("type")
 	metricName := c.Param("name")
@@ -90,6 +103,12 @@ func UpdateHandler(c *gin.Context, storage *storage.MemStorage) {
 	}
 }
 
+// GetValueHandler обрабатывает GET-запрос на "/value/{type}/{name}"
+// Принимает хранилище метрик и возвращает значение метрики
+//
+// Параметры:
+//   - c - gin.Context
+//   - storage - хранилище метрик
 func GetValueHandler(c *gin.Context, storage *storage.MemStorage) {
 	metricType := c.Param("type")
 	metricName := c.Param("name")
@@ -115,6 +134,12 @@ func GetValueHandler(c *gin.Context, storage *storage.MemStorage) {
 	}
 }
 
+// UpdateByBodyHandler обрабатывает POST-запрос на "/update"
+// Принимает хранилище метрик и обновляет значения метрик
+//
+// Параметры:
+//   - c - gin.Context
+//   - storage - хранилище метрик
 func UpdateByBodyHandler(c *gin.Context, storage *storage.MemStorage) {
 	if c.ContentType() == "application/json" {
 		UpdateByJSON(c, storage)
@@ -123,6 +148,12 @@ func UpdateByBodyHandler(c *gin.Context, storage *storage.MemStorage) {
 	}
 }
 
+// UpdatesByBodyHandler обрабатывает POST-запрос на "/updates"
+// Принимает хранилище метрик и обновляет значения метрик
+//
+// Параметры:
+//   - c - gin.Context
+//   - storage - хранилище метрик
 func UpdatesByBodyHandler(c *gin.Context, storage *storage.MemStorage) {
 	if c.ContentType() == "application/json" {
 		UpdatesByJSON(c, storage)
@@ -131,6 +162,12 @@ func UpdatesByBodyHandler(c *gin.Context, storage *storage.MemStorage) {
 	}
 }
 
+// UpdateByJSON обрабатывает POST-запрос на "/update"
+// Принимает хранилище метрик и обновляет значения метрик
+//
+// Параметры:
+//   - c - gin.Context
+//   - storage - хранилище метрик
 func UpdateByJSON(c *gin.Context, storage *storage.MemStorage) {
 	var metric metrics.Metrics
 
@@ -178,6 +215,12 @@ func UpdateByJSON(c *gin.Context, storage *storage.MemStorage) {
 	}
 }
 
+// UpdatesByJSON обрабатывает POST-запрос на "/updates"
+// Принимает хранилище метрик и обновляет значения метрик
+//
+// Параметры:
+//   - c - gin.Context
+//   - storage - хранилище метрик
 func UpdatesByJSON(c *gin.Context, storage *storage.MemStorage) {
 	var metricsBatch []metrics.Metrics
 
@@ -223,6 +266,12 @@ func UpdatesByJSON(c *gin.Context, storage *storage.MemStorage) {
 	c.JSON(http.StatusOK, metricsBatch)
 }
 
+// GetValueByBodyHandler обрабатывает GET-запрос на "/value"
+// Принимает хранилище метрик и возвращает значение метрики
+//
+// Параметры:
+//   - c - gin.Context
+//   - storage - хранилище метрик
 func GetValueByBodyHandler(c *gin.Context, storage *storage.MemStorage) {
 	if c.ContentType() == "application/json" {
 		GetValueByJSON(c, storage)
@@ -231,6 +280,12 @@ func GetValueByBodyHandler(c *gin.Context, storage *storage.MemStorage) {
 	}
 }
 
+// GetValueByJSON обрабатывает GET-запрос на "/value"
+// Принимает хранилище метрик и возвращает значение метрики
+//
+// Параметры:
+//   - c - gin.Context
+//   - storage - хранилище метрик
 func GetValueByJSON(c *gin.Context, storage *storage.MemStorage) {
 	var metric metrics.Metrics
 
@@ -282,6 +337,12 @@ func GetValueByJSON(c *gin.Context, storage *storage.MemStorage) {
 	}
 }
 
+// PingHandler обрабатывает GET-запрос на "/ping"
+// Принимает адрес базы данных и возвращает "pong"
+//
+// Параметры:
+//   - c - gin.Context
+//   - adr - адрес базы данных
 func PingHandler(c *gin.Context, adr string) {
 	db, err := sql.Open("postgres", adr)
 	if err != nil {

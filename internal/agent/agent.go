@@ -109,6 +109,7 @@ func (a *Agent) IncreasePollCount() {
 
 func (a *Agent) Run() {
 	logger.Log.Info("agent running")
+	logger.Log.Info("Intervals: ", zap.String("poll", a.PollInterval.String()), zap.String("report", a.ReportSendInterval.String()))
 	pollTicker := time.NewTicker(a.PollInterval)
 	reportTicker := time.NewTicker(a.ReportSendInterval)
 	defer pollTicker.Stop()
@@ -127,32 +128,29 @@ func (a *Agent) Run() {
 }
 
 func (a *Agent) ParallelSendMetrics() {
-	metricsChan := make(chan metrics.Metrics, a.RateLimit)
+	metricsChan := make(chan metrics.Metrics, 30)
 
+	for i := int64(0); i < a.RateLimit; i++ {
+		go a.sendByWorker(metricsChan)
+	}
 	a.mutex.Lock()
 
+	var m metrics.Metrics
 	for name, value := range a.metrics {
-		var m metrics.Metrics
-		if name == "PollCount" {
-			m.MType = metrics.Counter
-			m.ID = name
-			delta := int64(value)
-			m.Delta = &delta
-		} else {
-			m.MType = metrics.Gauge
-			m.ID = name
-			m.Value = &value
-		}
+		m.MType = metrics.Gauge
+		m.ID = name
+		m.Value = &value
 		metricsChan <- m
 	}
+	m.MType = metrics.Counter
+	m.ID = "PollCount"
+	delta := a.PollCount
+	m.Delta = &delta
+	metricsChan <- m
+
 	a.mutex.Unlock()
 
 	close(metricsChan)
-
-	var i int64 = 0
-	for ; i < a.RateLimit; i++ {
-		go a.sendByWorker(metricsChan)
-	}
 }
 
 func (a *Agent) sendByWorker(metricsChan <-chan metrics.Metrics) {

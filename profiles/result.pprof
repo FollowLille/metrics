@@ -1,0 +1,13 @@
+Showing nodes accounting for 5552.74kB, 100% of 5552.74kB total
+Showing top 10 nodes out of 49
+      flat  flat%   sum%        cum   cum%
+ 1127.67kB 20.31% 20.31%  1127.67kB 20.31%  compress/flate.newDeflateFast (inline)
+  902.59kB 16.25% 36.56%  2680.88kB 48.28%  compress/flate.NewWriter (inline)
+  768.26kB 13.84% 50.40%   768.26kB 13.84%  go.uber.org/zap/zapcore.newCounters
+  650.62kB 11.72% 62.12%  1778.29kB 32.03%  compress/flate.(*compressor).init
+  561.50kB 10.11% 72.23%   561.50kB 10.11%  golang.org/x/net/html.map.init.1
+  518.02kB  9.33% 81.56%   518.02kB  9.33%  regexp/syntax.(*compiler).inst
+  512.05kB  9.22% 90.78%   512.05kB  9.22%  regexp/syntax.(*parser).newRegexp
+  512.02kB  9.22%   100%   512.02kB  9.22%  crypto/tls.map.init.1
+         0     0%   100%  2680.88kB 48.28%  compress/gzip.(*Writer).Write
+         0     0%   100%   512.02kB  9.22%  crypto/tls.init
