@@ -18,7 +18,7 @@ func main() {
 	err := parseFlags()
 	if err != nil {
 		fmt.Printf("invalid flags: %s", err)
-		os.Exit(1)
+		return
 	}
 	a := Init(flagAddress)
 	logger.Initialize("info")

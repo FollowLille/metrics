@@ -31,7 +31,7 @@ func main() {
 
 	if err := logger.Initialize(flagLevel); err != nil {
 		fmt.Printf("invalid log level: %s", flagLevel)
-		os.Exit(1)
+		return
 	}
 
 	// Добавление pprof маршрутов
@@ -147,13 +147,13 @@ func runServer(s server.Server, r *gin.Engine, str *storage.MemStorage) error {
 	switch flagStorePlace {
 	case "file":
 		logger.Log.Info("loading metrics from file")
-		str, file, err := loadMetricsFromFile(str)
+		storage, file, err := loadMetricsFromFile(str)
 		if err != nil {
 			return err
 		}
 		defer file.Close()
 
-		go runPeriodicFileSaver(str, file, stopChan)
+		go runPeriodicFileSaver(storage, file, stopChan)
 	case "database":
 		logger.Log.Info("loading metrics from database")
 		database.InitDB(flagDatabaseAddress)
