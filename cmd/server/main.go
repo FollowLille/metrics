@@ -25,13 +25,20 @@ import (
 	"github.com/FollowLille/metrics/internal/storage"
 )
 
+var (
+	buildVersion string
+	buildDate    string
+	buildCommit  string
+)
+
 func main() {
+	printBuildFlag(buildVersion, buildDate, buildCommit)
 	parseFlags()
 	metricsStorage := storage.NewMemStorage()
 
 	if err := logger.Initialize(flagLevel); err != nil {
 		fmt.Printf("invalid log level: %s", flagLevel)
-		os.Exit(1)
+		return
 	}
 
 	// Добавление pprof маршрутов
@@ -147,13 +154,13 @@ func runServer(s server.Server, r *gin.Engine, str *storage.MemStorage) error {
 	switch flagStorePlace {
 	case "file":
 		logger.Log.Info("loading metrics from file")
-		str, file, err := loadMetricsFromFile(str)
+		storage, file, err := loadMetricsFromFile(str)
 		if err != nil {
 			return err
 		}
 		defer file.Close()
 
-		go runPeriodicFileSaver(str, file, stopChan)
+		go runPeriodicFileSaver(storage, file, stopChan)
 	case "database":
 		logger.Log.Info("loading metrics from database")
 		database.InitDB(flagDatabaseAddress)
@@ -254,4 +261,22 @@ func runPeriodicDatabaseSaver(db *sql.DB, stopChan chan struct{}, str *storage.M
 			return
 		}
 	}
+}
+
+// printBuildFlag выводит информацию о версии сборки, дате сборки и коммите.
+// Если переменные пусты, выводит "N/A".
+func printBuildFlag(buildVersion, buildDate, buildCommit string) {
+	buildVersion = ifFlagEmpty(buildVersion, "N/A")
+	buildDate = ifFlagEmpty(buildDate, "N/A")
+	buildCommit = ifFlagEmpty(buildCommit, "N/A")
+
+	fmt.Printf("Build version: %s\nBuild date: %s\nBuild commit: %s\n", buildVersion, buildDate, buildCommit)
+}
+
+// ifFlagEmpty возвращает значение `flag`, если оно не пустое. В противном случае возвращает `alternative`.
+func ifFlagEmpty(flag, alternative string) string {
+	if flag == "" {
+		return alternative
+	}
+	return flag
 }
