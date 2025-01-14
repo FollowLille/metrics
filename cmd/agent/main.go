@@ -14,7 +14,14 @@ import (
 	"github.com/FollowLille/metrics/internal/logger"
 )
 
+var (
+	buildVersion string
+	buildDate    string
+	buildCommit  string
+)
+
 func main() {
+	PrintBuildFlag(buildVersion, buildDate, buildCommit)
 	err := parseFlags()
 	if err != nil {
 		fmt.Printf("invalid flags: %s", err)
@@ -57,4 +64,22 @@ func Init(flags string) *agent.Agent {
 	a.RateLimit = flagRateLimit
 
 	return a
+}
+
+// PrintBuildFlag выводит информацию о версии сборки, дате сборки и коммите.
+// Если переменные пусты, выводит "N/A".
+func PrintBuildFlag(buildVersion, buildDate, buildCommit string) {
+	buildVersion = IfFlagEmpty(buildVersion, "N/A")
+	buildDate = IfFlagEmpty(buildDate, "N/A")
+	buildCommit = IfFlagEmpty(buildCommit, "N/A")
+
+	fmt.Printf("Build version: %s\nBuild date: %s\nBuild commit: %s\n", buildVersion, buildDate, buildCommit)
+}
+
+// IfFlagEmptyвозвращает значение `flag`, если оно не пустое. В противном случае возвращает `alternative`.
+func IfFlagEmpty(flag, alternative string) string {
+	if flag == "" {
+		return alternative
+	}
+	return flag
 }

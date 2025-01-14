@@ -25,7 +25,14 @@ import (
 	"github.com/FollowLille/metrics/internal/storage"
 )
 
+var (
+	buildVersion string
+	buildDate    string
+	buildCommit  string
+)
+
 func main() {
+	printBuildFlag(buildVersion, buildDate, buildCommit)
 	parseFlags()
 	metricsStorage := storage.NewMemStorage()
 
@@ -254,4 +261,22 @@ func runPeriodicDatabaseSaver(db *sql.DB, stopChan chan struct{}, str *storage.M
 			return
 		}
 	}
+}
+
+// printBuildFlag выводит информацию о версии сборки, дате сборки и коммите.
+// Если переменные пусты, выводит "N/A".
+func printBuildFlag(buildVersion, buildDate, buildCommit string) {
+	buildVersion = ifFlagEmpty(buildVersion, "N/A")
+	buildDate = ifFlagEmpty(buildDate, "N/A")
+	buildCommit = ifFlagEmpty(buildCommit, "N/A")
+
+	fmt.Printf("Build version: %s\nBuild date: %s\nBuild commit: %s\n", buildVersion, buildDate, buildCommit)
+}
+
+// ifFlagEmpty возвращает значение `flag`, если оно не пустое. В противном случае возвращает `alternative`.
+func ifFlagEmpty(flag, alternative string) string {
+	if flag == "" {
+		return alternative
+	}
+	return flag
 }
