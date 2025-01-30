@@ -50,7 +50,6 @@ func main() {
 			logger.Log.Error("failed to start pprof router", zap.Error(err))
 		}
 	}()
-
 	s := initializeServer(flagAddress, flagCryptoKeyPath)
 	router := setupRouter(metricsStorage, s.PrivateKey)
 
@@ -132,7 +131,7 @@ func initializeServer(flags, cryptoKeyPath string) server.Server {
 		os.Exit(1)
 	}
 
-	if cryptoKeyPath == "" {
+	if cryptoKeyPath != "" {
 		privateKey, err := crypto.LoadPrivateKey(cryptoKeyPath)
 		if err != nil {
 			logger.Log.Fatal("failed to load private key", zap.Error(err))
