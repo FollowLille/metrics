@@ -18,6 +18,7 @@ import (
 var (
 	flagAddress        string // адрес для прослушивания
 	flagHashKey        string // ключ хэша
+	flagCryptoKeyPath  string // путь к файлу с ключом
 	flagPollInterval   int64  // интервал опроса
 	flagReportInterval int64  // интервал отчета
 	flagRateLimit      int64  // лимит на кол-во одновременных воркеров
@@ -30,7 +31,8 @@ var (
 // Пример использования:
 //
 //			-address=127.0.0.1:8080
-//	     -hash-key=secret
+//	     	-hash-key=secret
+//			-crypto-key=/path/to/file
 //			-report-interval=10
 //			-poll-interval=2
 //			-rate-limit=4
@@ -39,6 +41,7 @@ var (
 func parseFlags() error {
 	pflag.StringVarP(&flagAddress, "address", "a", "localhost:8080", "address")
 	pflag.StringVarP(&flagHashKey, "hash-key", "k", "", "hash key")
+	pflag.StringVarP(&flagCryptoKeyPath, "crypto-key", "c", "", "path to crypto key file")
 	pflag.Int64VarP(&flagReportInterval, "report-interval", "r", 10, "report interval")
 	pflag.Int64VarP(&flagPollInterval, "poll-interval", "p", 2, "poll interval")
 	pflag.Int64VarP(&flagRateLimit, "rate-limit", "l", 4, "rate limit")
@@ -53,6 +56,10 @@ func parseFlags() error {
 
 	if envHashKey := os.Getenv("KEY"); envHashKey != "" {
 		flagHashKey = envHashKey
+	}
+
+	if envCryptoKey := os.Getenv("CRYPTO_KEY"); envCryptoKey != "" {
+		flagCryptoKeyPath = envCryptoKey
 	}
 
 	if envReportInterval := os.Getenv("REPORT_INTERVAL"); envReportInterval != "" {
@@ -82,6 +89,7 @@ func parseFlags() error {
 	logger.Log.Info("Flags",
 		zap.String("address", flagAddress),
 		zap.String("hash-key", flagHashKey),
+		zap.String("crypto-key", flagCryptoKeyPath),
 		zap.Int64("report-interval", flagReportInterval),
 		zap.Int64("poll-interval", flagPollInterval),
 		zap.Int64("rate-limit", flagRateLimit),

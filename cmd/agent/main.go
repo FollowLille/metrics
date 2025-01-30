@@ -4,7 +4,10 @@
 package main
 
 import (
+	"crypto/rsa"
 	"fmt"
+	"github.com/FollowLille/metrics/internal/crypto"
+	"go.uber.org/zap"
 	"os"
 	"strconv"
 	"strings"
@@ -18,6 +21,7 @@ var (
 	buildVersion string
 	buildDate    string
 	buildCommit  string
+	publicKey    *rsa.PublicKey
 )
 
 func main() {
@@ -27,7 +31,8 @@ func main() {
 		fmt.Printf("invalid flags: %s", err)
 		return
 	}
-	a := Init(flagAddress)
+
+	a := Init(flagAddress, flagCryptoKeyPath)
 	logger.Initialize("info")
 	a.Run()
 }
@@ -42,7 +47,7 @@ func main() {
 //
 // Возвращаемое значение:
 //   - agent.Agent - инициализированный агент
-func Init(flags string) *agent.Agent {
+func Init(flags string, flagCryptoKeyPath string) *agent.Agent {
 	splitedAddress := strings.Split(flags, ":")
 	if len(splitedAddress) != 2 {
 		fmt.Printf("invalid address %s, expected host:port", flags)
@@ -56,6 +61,14 @@ func Init(flags string) *agent.Agent {
 	}
 
 	a := agent.NewAgent()
+
+	if flagCryptoKeyPath != "" {
+		publicKey, err = crypto.LoadPublicKey(flagCryptoKeyPath)
+		if err != nil {
+			logger.Log.Fatal("failed to load public key", zap.Error(err))
+		}
+		a.PublicKey = publicKey
+	}
 	a.ServerAddress = serverAddress
 	a.ServerPort = serverPort
 	a.HashKey = flagHashKey

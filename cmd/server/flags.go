@@ -22,9 +22,13 @@ var (
 	flagDatabaseAddress string // адрес базы данных
 	flagStorePlace      string // место хранения
 	flagHashKey         string // ключ хэша
+	flagCryptoKeyPath   string // путь к файлу с приватным ключом
 	flagRestore         bool   // флаг восстановления
 )
 
+// parseFlags парсит командные флаги и переменные окружения для настройки сервера.
+// Флаги включают адрес сервера, адрес базы данных, адрес системы начисления и уровень логирования.
+// Если переменные окружения определены, они имеют приоритет над значениями по умолчанию.
 func parseFlags() {
 	pflag.Int64VarP(&flagStoreInterval, "store-interval", "i", 300, "store interval")
 	pflag.StringVarP(&flagAddress, "address", "a", "localhost:8080", "address")
@@ -32,6 +36,7 @@ func parseFlags() {
 	pflag.StringVarP(&flagFilePath, "file-path", "f", "", "file path")
 	pflag.StringVarP(&flagRestoreStr, "restore", "r", "true", "restore")
 	pflag.StringVarP(&flagDatabaseAddress, "database-address", "d", "", "database address")
+	pflag.StringVarP(&flagCryptoKeyPath, "crypto-key", "c", "", "private key path")
 	pflag.StringVarP(&flagHashKey, "hash-key", "k", "", "hash key")
 
 	pflag.Parse()
@@ -41,6 +46,10 @@ func parseFlags() {
 	}
 	if envLevel := os.Getenv("LOG_LEVEL"); envLevel != "" {
 		flagLevel = envLevel
+	}
+
+	if envCryptoKey := os.Getenv("CRYPTO_KEY"); envCryptoKey != "" {
+		flagCryptoKeyPath = envCryptoKey
 	}
 
 	envStoreInterval := os.Getenv("STORE_INTERVAL")
@@ -91,5 +100,8 @@ func parseFlags() {
 		zap.String("level", flagLevel),
 		zap.String("file-path", flagFilePath),
 		zap.String("restore", flagRestoreStr),
+		zap.String("database-address", flagDatabaseAddress),
+		zap.String("crypto-key", flagCryptoKeyPath),
+		zap.String("store-place", flagStorePlace),
 	)
 }
