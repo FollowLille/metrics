@@ -262,7 +262,7 @@ func (a *Agent) sendRequest(b bytes.Buffer) error {
 		data = encryptedData
 	}
 
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s:%d/update", a.ServerAddress, a.ServerPort), &b)
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s:%d/update", a.ServerAddress, a.ServerPort), bytes.NewReader(data))
 	if err != nil {
 		logger.Log.Error("failed to create request", zap.Error(err))
 		return err
