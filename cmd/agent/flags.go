@@ -54,7 +54,7 @@ var (
 func parseFlags() error {
 	pflag.StringVarP(&flagAddress, "address", "a", "localhost:8080", "address")
 	pflag.StringVarP(&flagHashKey, "hash-key", "k", "", "hash key")
-	pflag.StringVarP(&flagCryptoKeyPath, "crypto-key", "ck", "", "path to crypto key file")
+	pflag.StringVarP(&flagCryptoKeyPath, "crypto-key", "y", "", "path to crypto key file")
 	pflag.StringVarP(&flagConfigFilePath, "config", "c", "", "path to config file")
 	pflag.Int64VarP(&flagReportInterval, "report-interval", "r", 10, "report interval")
 	pflag.Int64VarP(&flagPollInterval, "poll-interval", "p", 2, "poll interval")

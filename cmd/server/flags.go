@@ -53,7 +53,7 @@ func parseFlags() {
 	pflag.StringVarP(&flagFilePath, "file-path", "f", "", "file path")
 	pflag.StringVarP(&flagRestoreStr, "restore", "r", "true", "restore")
 	pflag.StringVarP(&flagDatabaseAddress, "database-address", "d", "", "database address")
-	pflag.StringVarP(&flagCryptoKeyPath, "crypto-key", "ck", "", "private key path")
+	pflag.StringVarP(&flagCryptoKeyPath, "crypto-key", "y", "", "private key path")
 	pflag.StringVarP(&flagConfigFilePath, "config", "c", "", "path to config file")
 	pflag.StringVarP(&flagHashKey, "hash-key", "k", "", "hash key")
 
