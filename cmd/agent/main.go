@@ -6,14 +6,17 @@ package main
 import (
 	"crypto/rsa"
 	"fmt"
-	"github.com/FollowLille/metrics/internal/crypto"
-	"go.uber.org/zap"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/FollowLille/metrics/internal/agent"
+	"github.com/FollowLille/metrics/internal/crypto"
 	"github.com/FollowLille/metrics/internal/logger"
 )
 
@@ -34,7 +37,18 @@ func main() {
 
 	a := Init(flagAddress, flagCryptoKeyPath)
 	logger.Initialize("info")
-	a.Run()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
+
+	go a.Run()
+
+	sig := <-sigChan
+	logger.Log.Info("received signal", zap.String("signal", sig.String()))
+	a.Shutdown()
+
+	time.Sleep(5 * time.Second)
+	logger.Log.Info("agent shutdown")
 }
 
 // Init инициализирует агента

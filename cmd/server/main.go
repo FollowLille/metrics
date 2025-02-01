@@ -4,14 +4,17 @@
 package main
 
 import (
+	"context"
 	"crypto/rsa"
 	"database/sql"
 	"fmt"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -50,6 +53,8 @@ func main() {
 			logger.Log.Error("failed to start pprof router", zap.Error(err))
 		}
 	}()
+
+	// Запуск сервера
 	s := initializeServer(flagAddress, flagCryptoKeyPath)
 	router := setupRouter(metricsStorage, s.PrivateKey)
 
@@ -164,6 +169,18 @@ func runServer(s server.Server, r *gin.Engine, str *storage.MemStorage) error {
 	addr := fmt.Sprintf("%s:%d", s.Address, s.Port)
 	logger.Log.Info("starting server", zap.String("address", addr))
 
+	httpServer := &http.Server{
+		Addr:    addr,
+		Handler: r,
+	}
+
+	errChan := make(chan error, 1)
+	go func() {
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errChan <- err
+		}
+	}()
+
 	stopChan := make(chan struct{})
 
 	switch flagStorePlace {
@@ -192,7 +209,26 @@ func runServer(s server.Server, r *gin.Engine, str *storage.MemStorage) error {
 		logger.Log.Info("metrics will be stored in memory")
 	}
 
-	return r.Run(addr)
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	sig := <-quit
+	logger.Log.Info("received signal", zap.String("signal", sig.String()))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := httpServer.Shutdown(ctx); err != nil {
+		logger.Log.Error("failed to shutdown server", zap.Error(err))
+		return err
+	}
+
+	close(stopChan)
+	select {
+	case err := <-errChan:
+		return err
+	default:
+		return nil
+	}
 }
 
 // loadMetricsFromFile загружает метрики из файла

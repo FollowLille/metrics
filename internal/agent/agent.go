@@ -33,6 +33,8 @@ type Agent struct {
 	PublicKey          *rsa.PublicKey
 	metrics            map[string]float64
 	mutex              sync.Mutex
+	shutdown           chan struct{}
+	wg                 sync.WaitGroup
 }
 
 // NewAgent инициализирует агента
@@ -44,6 +46,7 @@ func NewAgent() *Agent {
 		ReportSendInterval: config.ReportSendInterval,
 		RateLimit:          config.RateLimit,
 		metrics:            make(map[string]float64),
+		shutdown:           make(chan struct{}),
 	}
 }
 
@@ -149,11 +152,28 @@ func (a *Agent) Run() {
 	for {
 		select {
 		case <-pollTicker.C:
-			go a.GetMetrics()
-			go a.GetGopsutilMetrics()
-			go a.IncreasePollCount()
+			a.wg.Add(3)
+			go func() {
+				defer a.wg.Done()
+				a.GetMetrics()
+			}()
+			go func() {
+				defer a.wg.Done()
+				a.GetGopsutilMetrics()
+			}()
+			go func() {
+				defer a.wg.Done()
+				a.IncreasePollCount()
+			}()
 		case <-reportTicker.C:
-			go a.ParallelSendMetrics()
+			a.wg.Add(1)
+			go func() {
+				defer a.wg.Done()
+				a.ParallelSendMetrics()
+			}()
+		case <-a.shutdown:
+			logger.Log.Info("Shutdown signal received, exiting Run")
+			return
 		}
 	}
 }
@@ -292,4 +312,11 @@ func (a *Agent) sendRequest(b bytes.Buffer) error {
 	}
 
 	return nil
+}
+
+func (a *Agent) Shutdown() {
+	close(a.shutdown)
+	logger.Log.Info("Waiting for other workers")
+	a.wg.Wait()
+	logger.Log.Info("Agent stopped")
 }
