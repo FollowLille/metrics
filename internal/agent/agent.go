@@ -314,6 +314,7 @@ func (a *Agent) sendRequest(b bytes.Buffer) error {
 	return nil
 }
 
+// Shutdown останавливает агента
 func (a *Agent) Shutdown() {
 	close(a.shutdown)
 	logger.Log.Info("Waiting for other workers")
