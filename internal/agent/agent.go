@@ -8,6 +8,7 @@ import (
 	"crypto/rsa"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"sync"
@@ -293,6 +294,7 @@ func (a *Agent) sendRequest(b bytes.Buffer) error {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Content-Encoding", "gzip")
+	req.Header.Set("X-Real-IP", getLocalIP())
 
 	if a.HashKey != "" {
 		hash := crypto.CalculateHash([]byte(a.HashKey), b.Bytes())
@@ -320,4 +322,21 @@ func (a *Agent) Shutdown() {
 	logger.Log.Info("Waiting for other workers")
 	a.wg.Wait()
 	logger.Log.Info("Agent stopped")
+}
+
+// getLocalIP возвращает IP локальной машины
+func getLocalIP() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return ""
+	}
+
+	for _, addr := range addrs {
+		if ipNet, ok := addr.(*net.IPNet); ok && !ipNet.IP.IsLoopback() {
+			if ipNet.IP.To4() != nil {
+				return ipNet.IP.String()
+			}
+		}
+	}
+	return ""
 }

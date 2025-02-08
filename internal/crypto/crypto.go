@@ -12,6 +12,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"os"
 
@@ -250,5 +251,33 @@ func CryptoEncodeMiddleware(publicKey *rsa.PublicKey) gin.HandlerFunc {
 
 		// Отправляем зашифрованный ответ
 		c.Data(http.StatusOK, "application/octet-stream", encryptedData)
+	}
+}
+
+func TrustedSubnetMiddleware(trustedSubnet string) gin.HandlerFunc {
+	if trustedSubnet == "" {
+		return func(c *gin.Context) {
+			c.Next()
+		}
+	}
+	_, subnet, err := net.ParseCIDR(trustedSubnet)
+	if err != nil {
+		logger.Log.Error("Failed to parse trusted subnet", zap.Error(err))
+	}
+	return func(c *gin.Context) {
+		ipStr := c.Request.Header.Get("X-Real-IP")
+		if ipStr == "" {
+			logger.Log.Warn("X-Real-IP header not found")
+			c.AbortWithStatus(http.StatusForbidden)
+			return
+		}
+
+		ip := net.ParseIP(ipStr)
+		if ip == nil || !subnet.Contains(ip) {
+			logger.Log.Warn("Invalid X-Real-IP header")
+			c.AbortWithStatus(http.StatusForbidden)
+			return
+		}
+		c.Next()
 	}
 }

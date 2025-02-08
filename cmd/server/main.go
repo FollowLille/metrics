@@ -79,6 +79,7 @@ func setupRouter(metricsStorage *storage.MemStorage, k *rsa.PrivateKey) *gin.Eng
 	if flagCryptoKeyPath != "" {
 		router.Use(crypto.CryptoDecodeMiddleware(k))
 	}
+	router.Use(crypto.TrustedSubnetMiddleware(flagTrustedSubnet))
 	router.Use(compress.GzipMiddleware(), compress.GzipResponseMiddleware())
 
 	// Маршруты

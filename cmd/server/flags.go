@@ -26,6 +26,7 @@ type Config struct {
 	HashKey         string `json:"hash_key"`
 	CryptoKeyPath   string `json:"crypto_key"`
 	Restore         string `json:"restore"`
+	TrustedSubnet   string `json:"trusted_subnet"`
 }
 
 // Флаги
@@ -40,6 +41,7 @@ var (
 	flagHashKey         string // ключ хэша
 	flagCryptoKeyPath   string // путь к файлу с приватным ключом
 	flagConfigFilePath  string // путь к файлу с конфигом
+	flagTrustedSubnet   string // доверённая подсеть (CIDR)
 	flagRestore         bool   // флаг восстановления
 )
 
@@ -55,6 +57,7 @@ func parseFlags() {
 	pflag.StringVarP(&flagDatabaseAddress, "database-address", "d", "", "database address")
 	pflag.StringVarP(&flagCryptoKeyPath, "crypto-key", "y", "", "private key path")
 	pflag.StringVarP(&flagConfigFilePath, "config", "c", "", "path to config file")
+	pflag.StringVarP(&flagTrustedSubnet, "trusted-subnet", "t", "", "trusted subnet (CIDR)")
 	pflag.StringVarP(&flagHashKey, "hash-key", "k", "", "hash key")
 
 	pflag.Parse()
@@ -65,9 +68,11 @@ func parseFlags() {
 	if envLevel := os.Getenv("LOG_LEVEL"); envLevel != "" {
 		flagLevel = envLevel
 	}
-
 	if envCryptoKey := os.Getenv("CRYPTO_KEY"); envCryptoKey != "" {
 		flagCryptoKeyPath = envCryptoKey
+	}
+	if envTrustedSubnet := os.Getenv("TRUSTED_SUBNET"); envTrustedSubnet != "" {
+		flagTrustedSubnet = envTrustedSubnet
 	}
 
 	envStoreInterval := os.Getenv("STORE_INTERVAL")
@@ -133,6 +138,8 @@ func parseFlags() {
 		zap.String("database-address", flagDatabaseAddress),
 		zap.String("crypto-key", flagCryptoKeyPath),
 		zap.String("store-place", flagStorePlace),
+		zap.String("config", flagConfigFilePath),
+		zap.String("trusted-subnet", flagTrustedSubnet),
 	)
 }
 
@@ -173,6 +180,9 @@ func loadConfigFromFile(path string) error {
 	}
 	if cfg.CryptoKeyPath != "" {
 		flagCryptoKeyPath = cfg.CryptoKeyPath
+	}
+	if cfg.TrustedSubnet != "" {
+		flagTrustedSubnet = cfg.TrustedSubnet
 	}
 	return nil
 }
