@@ -4,13 +4,19 @@
 package main
 
 import (
+	"crypto/rsa"
 	"fmt"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/FollowLille/metrics/internal/agent"
+	"github.com/FollowLille/metrics/internal/crypto"
 	"github.com/FollowLille/metrics/internal/logger"
 )
 
@@ -18,6 +24,7 @@ var (
 	buildVersion string
 	buildDate    string
 	buildCommit  string
+	publicKey    *rsa.PublicKey
 )
 
 func main() {
@@ -27,9 +34,21 @@ func main() {
 		fmt.Printf("invalid flags: %s", err)
 		return
 	}
-	a := Init(flagAddress)
+
+	a := Init(flagAddress, flagCryptoKeyPath)
 	logger.Initialize("info")
-	a.Run()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
+
+	go a.Run()
+
+	sig := <-sigChan
+	logger.Log.Info("received signal", zap.String("signal", sig.String()))
+	a.Shutdown()
+
+	time.Sleep(5 * time.Second)
+	logger.Log.Info("agent shutdown")
 }
 
 // Init инициализирует агента
@@ -42,7 +61,7 @@ func main() {
 //
 // Возвращаемое значение:
 //   - agent.Agent - инициализированный агент
-func Init(flags string) *agent.Agent {
+func Init(flags string, flagCryptoKeyPath string) *agent.Agent {
 	splitedAddress := strings.Split(flags, ":")
 	if len(splitedAddress) != 2 {
 		fmt.Printf("invalid address %s, expected host:port", flags)
@@ -56,6 +75,14 @@ func Init(flags string) *agent.Agent {
 	}
 
 	a := agent.NewAgent()
+
+	if flagCryptoKeyPath != "" {
+		publicKey, err = crypto.LoadPublicKey(flagCryptoKeyPath)
+		if err != nil {
+			logger.Log.Fatal("failed to load public key", zap.Error(err))
+		}
+		a.PublicKey = publicKey
+	}
 	a.ServerAddress = serverAddress
 	a.ServerPort = serverPort
 	a.HashKey = flagHashKey

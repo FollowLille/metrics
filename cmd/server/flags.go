@@ -4,6 +4,7 @@
 package main
 
 import (
+	"encoding/json"
 	"go.uber.org/zap"
 	"os"
 	"strconv"
@@ -13,6 +14,21 @@ import (
 	"github.com/FollowLille/metrics/internal/logger"
 )
 
+// Структура файла с флагами для инициализации через json
+type Config struct {
+	StoreInterval   int64  `json:"store_interval"`
+	Address         string `json:"address"`
+	Level           string `json:"level"`
+	FilePath        string `json:"file_path"`
+	RestoreStr      string `json:"restore_str"`
+	DatabaseAddress string `json:"database_address"`
+	StorePlace      string `json:"store_place"`
+	HashKey         string `json:"hash_key"`
+	CryptoKeyPath   string `json:"crypto_key"`
+	Restore         string `json:"restore"`
+}
+
+// Флаги
 var (
 	flagStoreInterval   int64  // интервал хранения данных
 	flagAddress         string // адрес для прослушивания
@@ -22,9 +38,14 @@ var (
 	flagDatabaseAddress string // адрес базы данных
 	flagStorePlace      string // место хранения
 	flagHashKey         string // ключ хэша
+	flagCryptoKeyPath   string // путь к файлу с приватным ключом
+	flagConfigFilePath  string // путь к файлу с конфигом
 	flagRestore         bool   // флаг восстановления
 )
 
+// parseFlags парсит командные флаги и переменные окружения для настройки сервера.
+// Флаги включают адрес сервера, адрес базы данных, адрес системы начисления и уровень логирования.
+// Если переменные окружения определены, они имеют приоритет над значениями по умолчанию.
 func parseFlags() {
 	pflag.Int64VarP(&flagStoreInterval, "store-interval", "i", 300, "store interval")
 	pflag.StringVarP(&flagAddress, "address", "a", "localhost:8080", "address")
@@ -32,6 +53,8 @@ func parseFlags() {
 	pflag.StringVarP(&flagFilePath, "file-path", "f", "", "file path")
 	pflag.StringVarP(&flagRestoreStr, "restore", "r", "true", "restore")
 	pflag.StringVarP(&flagDatabaseAddress, "database-address", "d", "", "database address")
+	pflag.StringVarP(&flagCryptoKeyPath, "crypto-key", "y", "", "private key path")
+	pflag.StringVarP(&flagConfigFilePath, "config", "c", "", "path to config file")
 	pflag.StringVarP(&flagHashKey, "hash-key", "k", "", "hash key")
 
 	pflag.Parse()
@@ -41,6 +64,10 @@ func parseFlags() {
 	}
 	if envLevel := os.Getenv("LOG_LEVEL"); envLevel != "" {
 		flagLevel = envLevel
+	}
+
+	if envCryptoKey := os.Getenv("CRYPTO_KEY"); envCryptoKey != "" {
+		flagCryptoKeyPath = envCryptoKey
 	}
 
 	envStoreInterval := os.Getenv("STORE_INTERVAL")
@@ -69,6 +96,18 @@ func parseFlags() {
 		flagHashKey = envHashKey
 	}
 
+	if envConfig := os.Getenv("CONFIG"); envConfig != "" {
+		flagConfigFilePath = envConfig
+	}
+
+	if flagConfigFilePath != "" {
+		err := loadConfigFromFile(flagConfigFilePath)
+		if err != nil {
+			logger.Log.Error("Invalid config file", zap.Error(err))
+			os.Exit(1)
+		}
+	}
+
 	if flagDatabaseAddress != "" {
 		flagStorePlace = "database"
 	} else if flagFilePath != "" {
@@ -91,5 +130,49 @@ func parseFlags() {
 		zap.String("level", flagLevel),
 		zap.String("file-path", flagFilePath),
 		zap.String("restore", flagRestoreStr),
+		zap.String("database-address", flagDatabaseAddress),
+		zap.String("crypto-key", flagCryptoKeyPath),
+		zap.String("store-place", flagStorePlace),
 	)
+}
+
+func loadConfigFromFile(path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	var cfg Config
+
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&cfg)
+	if err != nil {
+		return err
+	}
+
+	if cfg.StoreInterval != 0 {
+		flagStoreInterval = cfg.StoreInterval
+	}
+	if cfg.Address != "" {
+		flagAddress = cfg.Address
+	}
+	if cfg.Level != "" {
+		flagLevel = cfg.Level
+	}
+	if cfg.FilePath != "" {
+		flagFilePath = cfg.FilePath
+	}
+	flagRestore, err = strconv.ParseBool(flagRestoreStr)
+	if err != nil {
+		logger.Log.Error("Invalid restore value", zap.Error(err))
+		os.Exit(1)
+	}
+	if cfg.DatabaseAddress != "" {
+		flagDatabaseAddress = cfg.DatabaseAddress
+	}
+	if cfg.CryptoKeyPath != "" {
+		flagCryptoKeyPath = cfg.CryptoKeyPath
+	}
+	return nil
 }

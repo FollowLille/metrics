@@ -2,6 +2,7 @@
 package server
 
 import (
+	"crypto/rsa"
 	"fmt"
 	"net/url"
 
@@ -10,8 +11,9 @@ import (
 
 // Server хранит адрес и порт сервера
 type Server struct {
-	Address string
-	Port    int64
+	Address    string
+	Port       int64
+	PrivateKey *rsa.PrivateKey
 }
 
 // NewServer создает новый Server

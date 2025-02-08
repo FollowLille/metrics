@@ -4,13 +4,17 @@
 package main
 
 import (
+	"context"
+	"crypto/rsa"
 	"database/sql"
 	"fmt"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -50,9 +54,10 @@ func main() {
 		}
 	}()
 
-	router := setupRouter(metricsStorage)
+	// Запуск сервера
+	s := initializeServer(flagAddress, flagCryptoKeyPath)
+	router := setupRouter(metricsStorage, s.PrivateKey)
 
-	s := initializeServer(flagAddress)
 	if err := runServer(s, router, metricsStorage); err != nil {
 		panic(err)
 	}
@@ -66,11 +71,14 @@ func main() {
 //
 // Возвращаемое значение:
 //   - *gin.Engine - инициализированный gin.Engine
-func setupRouter(metricsStorage *storage.MemStorage) *gin.Engine {
+func setupRouter(metricsStorage *storage.MemStorage, k *rsa.PrivateKey) *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(logger.RequestLogger(), logger.ResponseLogger())
 	router.Use(crypto.HashMiddleware([]byte(flagHashKey)))
+	if flagCryptoKeyPath != "" {
+		router.Use(crypto.CryptoDecodeMiddleware(k))
+	}
 	router.Use(compress.GzipMiddleware(), compress.GzipResponseMiddleware())
 
 	// Маршруты
@@ -114,7 +122,7 @@ func setupRouter(metricsStorage *storage.MemStorage) *gin.Engine {
 //
 // Возвращаемое значение:
 //   - server.Server - инициализированный сервер
-func initializeServer(flags string) server.Server {
+func initializeServer(flags, cryptoKeyPath string) server.Server {
 	splittedAddress := strings.Split(flags, ":")
 	if len(splittedAddress) != 2 {
 		fmt.Printf("invalid address %s, expected host:port", flags)
@@ -126,6 +134,18 @@ func initializeServer(flags string) server.Server {
 	if err != nil {
 		fmt.Printf("invalid port: %s", splittedAddress[1])
 		os.Exit(1)
+	}
+
+	if cryptoKeyPath != "" {
+		privateKey, err := crypto.LoadPrivateKey(cryptoKeyPath)
+		if err != nil {
+			logger.Log.Fatal("failed to load private key", zap.Error(err))
+		}
+		return server.Server{
+			Address:    serverAddress,
+			Port:       serverPort,
+			PrivateKey: privateKey,
+		}
 	}
 
 	return server.Server{
@@ -148,6 +168,18 @@ func initializeServer(flags string) server.Server {
 func runServer(s server.Server, r *gin.Engine, str *storage.MemStorage) error {
 	addr := fmt.Sprintf("%s:%d", s.Address, s.Port)
 	logger.Log.Info("starting server", zap.String("address", addr))
+
+	httpServer := &http.Server{
+		Addr:    addr,
+		Handler: r,
+	}
+
+	errChan := make(chan error, 1)
+	go func() {
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errChan <- err
+		}
+	}()
 
 	stopChan := make(chan struct{})
 
@@ -177,7 +209,26 @@ func runServer(s server.Server, r *gin.Engine, str *storage.MemStorage) error {
 		logger.Log.Info("metrics will be stored in memory")
 	}
 
-	return r.Run(addr)
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	sig := <-quit
+	logger.Log.Info("received signal", zap.String("signal", sig.String()))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := httpServer.Shutdown(ctx); err != nil {
+		logger.Log.Error("failed to shutdown server", zap.Error(err))
+		return err
+	}
+
+	close(stopChan)
+	select {
+	case err := <-errChan:
+		return err
+	default:
+		return nil
+	}
 }
 
 // loadMetricsFromFile загружает метрики из файла

@@ -4,10 +4,16 @@ package crypto
 import (
 	"bytes"
 	"crypto/hmac"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/hex"
+	"encoding/pem"
+	"errors"
 	"io"
 	"net/http"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -84,6 +90,10 @@ func (w *hashResponseWriter) GetBody() []byte {
 // Принимает ключ и возвращает gin.HandlerFunc
 func HashMiddleware(key []byte) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Всегда создаем NewHashResponseWriter, потому что он будет переиспользван потом
+		w := NewHashResponseWriter(c.Writer)
+		c.Writer = w
+
 		if string(key) == "" {
 			c.Next()
 			return
@@ -112,13 +122,133 @@ func HashMiddleware(key []byte) gin.HandlerFunc {
 			return
 		}
 
-		w := NewHashResponseWriter(c.Writer)
-		c.Writer = w
-
 		c.Next()
 
 		originalBody := w.GetBody()
 		responseHash := CalculateHash(key, originalBody)
 		c.Header("HashSHA256", responseHash)
+	}
+}
+
+// LoadPrivateKey загружает RSA-ключ из файла
+// Принимает путь к файлу и возвращает RSA-ключ
+//
+// Параметры:
+//   - filePath - путь к файлу
+//
+// Возвращаемое значение:
+//   - RSA-ключ
+//   - error
+func LoadPrivateKey(filePath string) (*rsa.PrivateKey, error) {
+	keyData, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+	decoded, _ := pem.Decode(keyData)
+	if decoded == nil || decoded.Type != "RSA PRIVATE KEY" {
+		return nil, errors.New("invalid private key file")
+	}
+
+	return x509.ParsePKCS1PrivateKey(decoded.Bytes)
+}
+
+// LoadPublicKey загружает RSA-ключ из файла
+// Принимает путь к файлу и возвращает RSA-ключ
+//
+// Параметры:
+//   - filePath - путь к файлу
+//
+// Возвращаемое значение:
+//   - RSA-ключ
+//   - error
+func LoadPublicKey(filePath string) (*rsa.PublicKey, error) {
+	keyData, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+	decoded, _ := pem.Decode(keyData)
+	if decoded == nil || decoded.Type != "PUBLIC KEY" {
+		return nil, errors.New("invalid public key file")
+	}
+	key, err := x509.ParsePKIXPublicKey(decoded.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	pubKey, ok := key.(*rsa.PublicKey)
+	if !ok {
+		return nil, errors.New("invalid public key")
+	}
+	return pubKey, nil
+}
+
+// Encrypt шифрует данные
+// Принимает RSA-ключ и возвращает зашифрованные данные
+//
+// Параметры:
+//   - publicKey - RSA-ключ
+//   - data - данные
+//
+// Возвращаемое значение:
+//   - зашифрованные данные
+//   - error
+func Encrypt(publicKey *rsa.PublicKey, data []byte) ([]byte, error) {
+	return rsa.EncryptPKCS1v15(rand.Reader, publicKey, data)
+}
+
+// Decrypt дешифрует данные
+// Принимает RSA-ключ и возвращает расшифрованные данные
+//
+// Параметры:
+//   - privateKey - RSA-ключ
+//   - data - данные
+//
+// Возвращаемое значение:
+//   - расшифрованные данные
+//   - error
+func Decrypt(privateKey *rsa.PrivateKey, data []byte) ([]byte, error) {
+	return rsa.DecryptPKCS1v15(rand.Reader, privateKey, data)
+}
+
+func CryptoDecodeMiddleware(privateKey *rsa.PrivateKey) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		body, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			logger.Log.Error("Failed to read request body", zap.Error(err))
+			c.AbortWithStatus(http.StatusInternalServerError)
+			return
+		}
+
+		decryptedData, err := Decrypt(privateKey, body)
+		if err != nil {
+			logger.Log.Error("Failed to decrypt data", zap.Error(err))
+			c.AbortWithStatus(http.StatusInternalServerError)
+			return
+		}
+		c.Request.Body = io.NopCloser(bytes.NewBuffer(decryptedData))
+		c.Next()
+	}
+}
+
+func CryptoEncodeMiddleware(publicKey *rsa.PublicKey) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Выполняем следующий обработчик
+		if _, ok := c.Writer.(*hashResponseWriter); !ok {
+			c.Writer = NewHashResponseWriter(c.Writer)
+		}
+		c.Next()
+
+		w, _ := c.Writer.(*hashResponseWriter)
+		body := w.GetBody()
+
+		// Шифруем данные
+		encryptedData, err := Encrypt(publicKey, body)
+		if err != nil {
+			logger.Log.Error("Failed to encrypt response body", zap.Error(err))
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to encrypt response"})
+			return
+		}
+
+		// Отправляем зашифрованный ответ
+		c.Data(http.StatusOK, "application/octet-stream", encryptedData)
 	}
 }

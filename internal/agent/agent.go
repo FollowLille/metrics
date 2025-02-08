@@ -5,6 +5,7 @@ package agent
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/rsa"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -29,10 +30,14 @@ type Agent struct {
 	RateLimit          int64
 	PollInterval       time.Duration
 	ReportSendInterval time.Duration
+	PublicKey          *rsa.PublicKey
 	metrics            map[string]float64
 	mutex              sync.Mutex
+	shutdown           chan struct{}
+	wg                 sync.WaitGroup
 }
 
+// NewAgent инициализирует агента
 func NewAgent() *Agent {
 	return &Agent{
 		ServerAddress:      config.Address,
@@ -41,9 +46,18 @@ func NewAgent() *Agent {
 		ReportSendInterval: config.ReportSendInterval,
 		RateLimit:          config.RateLimit,
 		metrics:            make(map[string]float64),
+		shutdown:           make(chan struct{}),
 	}
 }
 
+// ChangeIntervalByName изменяет интервал по имени
+//
+// Параметры:
+//   - name - имя интервала
+//   - seconds - интервал в секундах
+//
+// Возвращаемое значение:
+//   - error - в случае ошибки
 func (a *Agent) ChangeIntervalByName(name string, seconds int64) error {
 	if seconds < 1 {
 		return fmt.Errorf("incorect inverval value: %d, value must be > 0", seconds)
@@ -59,6 +73,13 @@ func (a *Agent) ChangeIntervalByName(name string, seconds int64) error {
 	return nil
 }
 
+// ChangeAddress изменяет адрес
+//
+// Параметры:
+//   - address - адрес
+//
+// Возвращаемое значение:
+//   - error
 func (a *Agent) ChangeAddress(address string) error {
 	u, err := url.ParseRequestURI(address)
 	if err != nil {
@@ -77,6 +98,13 @@ func (a *Agent) ChangeAddress(address string) error {
 	return nil
 }
 
+// ChangePort изменяет порт
+//
+// Параметры:
+//   - port - порт
+//
+// Возвращаемое значение:
+//   - error
 func (a *Agent) ChangePort(port int64) error {
 	if port < 1024 || port > 65535 {
 		return fmt.Errorf("invalid port: %d", port)
@@ -85,6 +113,7 @@ func (a *Agent) ChangePort(port int64) error {
 	return nil
 }
 
+// GetMetrics получает метрики
 func (a *Agent) GetMetrics() {
 	m := metrics.GetRuntimeMetrics()
 	a.mutex.Lock()
@@ -94,6 +123,7 @@ func (a *Agent) GetMetrics() {
 	}
 }
 
+// GetGopsutilMetrics получает расширенные метрики
 func (a *Agent) GetGopsutilMetrics() {
 	m := metrics.GetGopsutilMetrics()
 	a.mutex.Lock()
@@ -103,12 +133,14 @@ func (a *Agent) GetGopsutilMetrics() {
 	}
 }
 
+// IncreasePollCount увеличивает счетчик опросов
 func (a *Agent) IncreasePollCount() {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 	a.PollCount++
 }
 
+// Run запускает агента
 func (a *Agent) Run() {
 	logger.Log.Info("agent running")
 	logger.Log.Info("Intervals: ", zap.String("poll", a.PollInterval.String()), zap.String("report", a.ReportSendInterval.String()))
@@ -120,15 +152,33 @@ func (a *Agent) Run() {
 	for {
 		select {
 		case <-pollTicker.C:
-			go a.GetMetrics()
-			go a.GetGopsutilMetrics()
-			go a.IncreasePollCount()
+			a.wg.Add(3)
+			go func() {
+				defer a.wg.Done()
+				a.GetMetrics()
+			}()
+			go func() {
+				defer a.wg.Done()
+				a.GetGopsutilMetrics()
+			}()
+			go func() {
+				defer a.wg.Done()
+				a.IncreasePollCount()
+			}()
 		case <-reportTicker.C:
-			go a.ParallelSendMetrics()
+			a.wg.Add(1)
+			go func() {
+				defer a.wg.Done()
+				a.ParallelSendMetrics()
+			}()
+		case <-a.shutdown:
+			logger.Log.Info("Shutdown signal received, exiting Run")
+			return
 		}
 	}
 }
 
+// ParallelSendMetrics запускает параллельное отправление метрик
 func (a *Agent) ParallelSendMetrics() {
 	metricsChan := make(chan metrics.Metrics, 30)
 
@@ -155,6 +205,11 @@ func (a *Agent) ParallelSendMetrics() {
 	close(metricsChan)
 }
 
+// sendByWorker отправляет метрики по каналу
+// Принимает канал метрик
+//
+// Параметры:
+//   - metricsChan - канал метрик
 func (a *Agent) sendByWorker(metricsChan <-chan metrics.Metrics) {
 	for m := range metricsChan {
 		err := a.sendSingleMetric(m)
@@ -164,6 +219,14 @@ func (a *Agent) sendByWorker(metricsChan <-chan metrics.Metrics) {
 	}
 }
 
+// sendSingleMetric отправляет метрику
+// Принимает метрику
+//
+// Параметры:
+//   - metric - метрика
+//
+// Возвращаемое значение:
+//   - error
 func (a *Agent) sendSingleMetric(metric metrics.Metrics) error {
 	jsonMetrics, err := json.Marshal(metric)
 	if err != nil {
@@ -198,15 +261,38 @@ func (a *Agent) sendSingleMetric(metric metrics.Metrics) error {
 	return nil
 }
 
+// sendRequest отправляет запрос на сервер
+// если включен шифрование, то шифруем данные
+// если включен хеш, то вычисляем хеш и добавляем его в заголовок
+//
+// Параметры:
+//   - b bytes.Buffer - буфер с данными
+//
+// Возвращаемое значение:
+//   - error
 func (a *Agent) sendRequest(b bytes.Buffer) error {
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s:%d/update", a.ServerAddress, a.ServerPort), &b)
+	data := b.Bytes()
+
+	if a.PublicKey != nil {
+		encryptedData, err := crypto.Encrypt(a.PublicKey, data)
+		if err != nil {
+			logger.Log.Error("failed to encrypt data", zap.Error(err))
+			return err
+		}
+		data = encryptedData
+	}
+
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s:%d/update", a.ServerAddress, a.ServerPort), bytes.NewReader(data))
 	if err != nil {
 		logger.Log.Error("failed to create request", zap.Error(err))
 		return err
 	}
-
+	if a.PublicKey != nil {
+		req.Header.Set("Content-Type", "application/octet-stream")
+	} else {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	req.Header.Set("Content-Encoding", "gzip")
-	req.Header.Set("Content-Type", "application/json")
 
 	if a.HashKey != "" {
 		hash := crypto.CalculateHash([]byte(a.HashKey), b.Bytes())
@@ -226,4 +312,12 @@ func (a *Agent) sendRequest(b bytes.Buffer) error {
 	}
 
 	return nil
+}
+
+// Shutdown останавливает агента
+func (a *Agent) Shutdown() {
+	close(a.shutdown)
+	logger.Log.Info("Waiting for other workers")
+	a.wg.Wait()
+	logger.Log.Info("Agent stopped")
 }
