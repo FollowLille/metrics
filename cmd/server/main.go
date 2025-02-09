@@ -8,6 +8,7 @@ import (
 	"crypto/rsa"
 	"database/sql"
 	"fmt"
+	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -18,15 +19,21 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 
 	"github.com/FollowLille/metrics/internal/compress"
 	"github.com/FollowLille/metrics/internal/crypto"
 	"github.com/FollowLille/metrics/internal/database"
+	grpcHandler "github.com/FollowLille/metrics/internal/grpc"
+	"github.com/FollowLille/metrics/internal/grpc/interceptors"
 	"github.com/FollowLille/metrics/internal/handler"
 	"github.com/FollowLille/metrics/internal/logger"
 	"github.com/FollowLille/metrics/internal/server"
 	"github.com/FollowLille/metrics/internal/storage"
+	pb "github.com/FollowLille/metrics/proto"
 )
 
 var (
@@ -54,13 +61,108 @@ func main() {
 		}
 	}()
 
-	// Запуск сервера
+	// Подготовка и запуск HTTP сервера
+
+	httpServer, privateKey := initializeAndRunHTTPServer(metricsStorage)
+
+	// Подготовка и запуск GRPC сервера при проставлении флага
+	if flagGrpcAddress != "" {
+		grpcServer := initializeAndRunGRPCServer(metricsStorage, privateKey)
+		waitForShutdown(httpServer, grpcServer)
+	} else {
+		waitForShutdown(httpServer, nil)
+	}
+}
+
+// initializeAndRunHTTPServer инициализирует и запускает HTTP сервер
+// Принимает хранилище метрик и возвращает *http.Server
+//
+// Параметры:
+//   - metricsStorage - хранилище метрик
+//
+// Возвращаемое значение:
+//   - *http.Server - инициализированный и запущенный HTTP сервер
+func initializeAndRunHTTPServer(metricsStorage *storage.MemStorage) (*http.Server, *rsa.PrivateKey) {
 	s := initializeServer(flagAddress, flagCryptoKeyPath)
 	router := setupRouter(metricsStorage, s.PrivateKey)
 
-	if err := runServer(s, router, metricsStorage); err != nil {
-		panic(err)
+	addr := fmt.Sprintf("%s:%v", s.Address, s.Port)
+	logger.Log.Info("starting server", zap.String("address", addr))
+
+	httpServer := &http.Server{
+		Addr:    addr,
+		Handler: router,
 	}
+
+	go func() {
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Log.Fatal("failed to start server", zap.Error(err))
+		}
+	}()
+
+	return httpServer, s.PrivateKey
+}
+
+// initializeAndRunGRPCServer инициализирует и запускает GRPC сервер
+// Принимает хранилище метрик и возвращает *grpc.Server
+//
+// Параметры:
+//   - metricsStorage - хранилище метрик
+//
+// Возвращаемое значение:
+//   - *grpc.Server - инициализированный и запущенный GRPC сервер
+func initializeAndRunGRPCServer(metricsStorage *storage.MemStorage, privateKey *rsa.PrivateKey) *grpc.Server {
+	lis, err := net.Listen("tcp", flagGrpcAddress)
+	if err != nil {
+		logger.Log.Fatal("failed to listen", zap.Error(err))
+	}
+
+	grpcServer := grpc.NewServer(
+		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
+			interceptors.LoggingInterceptor,
+			interceptors.HashInterceptor([]byte(flagHashKey)),
+			interceptors.TrustedSubnetInterceptor(flagTrustedSubnet),
+			interceptors.CryptoDecodeInterceptor(privateKey),
+		)))
+	pb.RegisterMetricsServiceServer(grpcServer, grpcHandler.NewServer(metricsStorage))
+
+	reflection.Register(grpcServer)
+	logger.Log.Info("starting grpc server", zap.String("address", flagGrpcAddress))
+
+	go func() {
+		if err := grpcServer.Serve(lis); err != nil {
+			logger.Log.Fatal("failed to start grpc server", zap.Error(err))
+		}
+	}()
+
+	return grpcServer
+}
+
+// waitForShutdown ожидает завершения работы серверов
+// Принимает *http.Server и *grpc.Server
+//
+// Параметры:
+//   - httpServer - HTTP сервер
+//   - grpcServer - GRPC сервер
+func waitForShutdown(httpServer *http.Server, grpcServer *grpc.Server) {
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
+	sig := <-quit
+	logger.Log.Info("received signal", zap.String("signal", sig.String()))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := httpServer.Shutdown(ctx); err != nil {
+		logger.Log.Error("failed to shutdown http server", zap.Error(err))
+	}
+
+	if grpcServer != nil {
+		grpcServer.GracefulStop()
+	}
+
+	logger.Log.Info("server shutdown")
 }
 
 // setupRouter инициализирует gin и настраивает маршруты
@@ -79,6 +181,7 @@ func setupRouter(metricsStorage *storage.MemStorage, k *rsa.PrivateKey) *gin.Eng
 	if flagCryptoKeyPath != "" {
 		router.Use(crypto.CryptoDecodeMiddleware(k))
 	}
+	router.Use(crypto.TrustedSubnetMiddleware(flagTrustedSubnet))
 	router.Use(compress.GzipMiddleware(), compress.GzipResponseMiddleware())
 
 	// Маршруты
@@ -151,83 +254,6 @@ func initializeServer(flags, cryptoKeyPath string) server.Server {
 	return server.Server{
 		Address: serverAddress,
 		Port:    serverPort,
-	}
-}
-
-// runServer запускает сервер
-// Принимает сервер, gin.Engine и хранилище метрик
-// Запускает сервер
-//
-// Параметры:
-//   - s - сервер
-//   - r - gin.Engine
-//   - str - хранилище метрик
-//
-// Возвращаемое значение:
-//   - error - ошибка запуска сервера
-func runServer(s server.Server, r *gin.Engine, str *storage.MemStorage) error {
-	addr := fmt.Sprintf("%s:%d", s.Address, s.Port)
-	logger.Log.Info("starting server", zap.String("address", addr))
-
-	httpServer := &http.Server{
-		Addr:    addr,
-		Handler: r,
-	}
-
-	errChan := make(chan error, 1)
-	go func() {
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			errChan <- err
-		}
-	}()
-
-	stopChan := make(chan struct{})
-
-	switch flagStorePlace {
-	case "file":
-		logger.Log.Info("loading metrics from file")
-		storage, file, err := loadMetricsFromFile(str)
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-
-		go runPeriodicFileSaver(storage, file, stopChan)
-	case "database":
-		logger.Log.Info("loading metrics from database")
-		database.InitDB(flagDatabaseAddress)
-		database.PrepareDB()
-
-		db := database.DB
-		if err := database.LoadMetricsFromDatabase(str, db); err != nil {
-			return err
-		}
-		logger.Log.Info("metrics loaded from database")
-
-		go runPeriodicDatabaseSaver(db, stopChan, str)
-	default:
-		logger.Log.Info("metrics will be stored in memory")
-	}
-
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-	sig := <-quit
-	logger.Log.Info("received signal", zap.String("signal", sig.String()))
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := httpServer.Shutdown(ctx); err != nil {
-		logger.Log.Error("failed to shutdown server", zap.Error(err))
-		return err
-	}
-
-	close(stopChan)
-	select {
-	case err := <-errChan:
-		return err
-	default:
-		return nil
 	}
 }
 

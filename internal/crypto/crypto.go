@@ -9,9 +9,11 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"os"
 
@@ -229,26 +231,75 @@ func CryptoDecodeMiddleware(privateKey *rsa.PrivateKey) gin.HandlerFunc {
 	}
 }
 
-func CryptoEncodeMiddleware(publicKey *rsa.PublicKey) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// Выполняем следующий обработчик
-		if _, ok := c.Writer.(*hashResponseWriter); !ok {
-			c.Writer = NewHashResponseWriter(c.Writer)
+// TrustedSubnetMiddleware проверяет, что IP-адрес принадлежит подсети trustedSubnet
+// Если IP-адрес не принадлежит подсети, то возвращается 403 ошибка
+// Принимает CIDR-подсеть и возвращает gin.HandlerFunc
+//
+// Параметры:
+//   - trustedSubnet - CIDR-подсеть
+//
+// Возвращаемое значение:
+//   - gin.HandlerFunc
+func TrustedSubnetMiddleware(trustedSubnet string) gin.HandlerFunc {
+	if trustedSubnet == "" {
+		return func(c *gin.Context) {
+			c.Next()
 		}
-		c.Next()
-
-		w, _ := c.Writer.(*hashResponseWriter)
-		body := w.GetBody()
-
-		// Шифруем данные
-		encryptedData, err := Encrypt(publicKey, body)
-		if err != nil {
-			logger.Log.Error("Failed to encrypt response body", zap.Error(err))
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to encrypt response"})
+	}
+	_, subnet, err := net.ParseCIDR(trustedSubnet)
+	if err != nil {
+		logger.Log.Error("Failed to parse trusted subnet", zap.Error(err))
+	}
+	return func(c *gin.Context) {
+		ipStr := c.Request.Header.Get("X-Real-IP")
+		if ipStr == "" {
+			logger.Log.Warn("X-Real-IP header not found")
+			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
 
-		// Отправляем зашифрованный ответ
-		c.Data(http.StatusOK, "application/octet-stream", encryptedData)
+		ip := net.ParseIP(ipStr)
+		if ip == nil || !subnet.Contains(ip) {
+			logger.Log.Warn("Invalid X-Real-IP header")
+			c.AbortWithStatus(http.StatusForbidden)
+			return
+		}
+		c.Next()
 	}
+}
+
+// DecodeGRPCRequest декодирует запрос в структуру
+// Принимает структуру и RSA-ключ и возвращает структуру
+//
+// Параметры:
+//   - req - структура
+//   - privateKey - RSA-ключ
+//
+// Возвращаемое значение:
+//   - структура
+//   - error
+func DecodeGRPCRequest(req interface{}, privateKey *rsa.PrivateKey) (interface{}, error) {
+	if privateKey == nil {
+		return nil, errors.New("private key is nil")
+	}
+
+	reqBytes, err := json.Marshal(req)
+	if err != nil {
+		logger.Log.Error("Failed to marshal request", zap.Error(err))
+		return nil, err
+	}
+
+	decryptedData, err := Decrypt(privateKey, reqBytes)
+	if err != nil {
+		logger.Log.Error("Failed to decrypt request", zap.Error(err))
+		return nil, err
+	}
+
+	err = json.Unmarshal(decryptedData, req)
+	if err != nil {
+		logger.Log.Error("Failed to unmarshal request", zap.Error(err))
+		return nil, err
+	}
+
+	return req, nil
 }

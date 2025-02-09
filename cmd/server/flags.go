@@ -26,6 +26,11 @@ type Config struct {
 	HashKey         string `json:"hash_key"`
 	CryptoKeyPath   string `json:"crypto_key"`
 	Restore         string `json:"restore"`
+	TrustedSubnet   string `json:"trusted_subnet"`
+
+	GrpcAddress     string `json:"grpc_address"`
+	GrpcTLSCertPath string `json:"grpc_tls_cert_path"`
+	GrpcTLSKeyPath  string `json:"grpc_tls_key_path"`
 }
 
 // Флаги
@@ -40,7 +45,12 @@ var (
 	flagHashKey         string // ключ хэша
 	flagCryptoKeyPath   string // путь к файлу с приватным ключом
 	flagConfigFilePath  string // путь к файлу с конфигом
+	flagTrustedSubnet   string // доверённая подсеть (CIDR)
 	flagRestore         bool   // флаг восстановления
+
+	flagGrpcAddress     string // адрес gRPC
+	flagGrpcTLSCertPath string // путь к сертификату
+	flagGrpcTLSKeyPath  string // путь к приватному ключу
 )
 
 // parseFlags парсит командные флаги и переменные окружения для настройки сервера.
@@ -55,19 +65,25 @@ func parseFlags() {
 	pflag.StringVarP(&flagDatabaseAddress, "database-address", "d", "", "database address")
 	pflag.StringVarP(&flagCryptoKeyPath, "crypto-key", "y", "", "private key path")
 	pflag.StringVarP(&flagConfigFilePath, "config", "c", "", "path to config file")
+	pflag.StringVarP(&flagTrustedSubnet, "trusted-subnet", "t", "", "trusted subnet (CIDR)")
 	pflag.StringVarP(&flagHashKey, "hash-key", "k", "", "hash key")
 
-	pflag.Parse()
+	pflag.StringVarP(&flagGrpcAddress, "grpc-address", "g", "", "grpc address")
+	pflag.StringVarP(&flagGrpcTLSCertPath, "grpc-tls-cert", "T", "", "grpc tls cert path")
+	pflag.StringVarP(&flagGrpcTLSKeyPath, "grpc-tls-key", "K", "", "grpc tls key path")
 
+	pflag.Parse()
 	if envAddress := os.Getenv("ADDRESS"); envAddress != "" {
 		flagAddress = envAddress
 	}
 	if envLevel := os.Getenv("LOG_LEVEL"); envLevel != "" {
 		flagLevel = envLevel
 	}
-
 	if envCryptoKey := os.Getenv("CRYPTO_KEY"); envCryptoKey != "" {
 		flagCryptoKeyPath = envCryptoKey
+	}
+	if envTrustedSubnet := os.Getenv("TRUSTED_SUBNET"); envTrustedSubnet != "" {
+		flagTrustedSubnet = envTrustedSubnet
 	}
 
 	envStoreInterval := os.Getenv("STORE_INTERVAL")
@@ -115,7 +131,6 @@ func parseFlags() {
 	} else {
 		flagStorePlace = "memory"
 	}
-
 	var err error
 	flagRestore, err = strconv.ParseBool(flagRestoreStr)
 	if err != nil {
@@ -133,9 +148,16 @@ func parseFlags() {
 		zap.String("database-address", flagDatabaseAddress),
 		zap.String("crypto-key", flagCryptoKeyPath),
 		zap.String("store-place", flagStorePlace),
+		zap.String("config", flagConfigFilePath),
+		zap.String("trusted-subnet", flagTrustedSubnet),
+		zap.String("grpc-address", flagGrpcAddress),
+		zap.String("grpc-tls-cert", flagGrpcTLSCertPath),
+		zap.String("grpc-tls-key", flagGrpcTLSKeyPath),
 	)
+
 }
 
+// loadConfigFromFile загружает конфигурационный файл с заданным путём.
 func loadConfigFromFile(path string) error {
 	file, err := os.Open(path)
 	if err != nil {
@@ -173,6 +195,18 @@ func loadConfigFromFile(path string) error {
 	}
 	if cfg.CryptoKeyPath != "" {
 		flagCryptoKeyPath = cfg.CryptoKeyPath
+	}
+	if cfg.TrustedSubnet != "" {
+		flagTrustedSubnet = cfg.TrustedSubnet
+	}
+	if cfg.GrpcAddress != "" {
+		flagGrpcAddress = cfg.GrpcAddress
+	}
+	if cfg.GrpcTLSCertPath != "" {
+		flagGrpcTLSCertPath = cfg.GrpcTLSCertPath
+	}
+	if cfg.GrpcTLSKeyPath != "" {
+		flagGrpcTLSKeyPath = cfg.GrpcTLSKeyPath
 	}
 	return nil
 }
