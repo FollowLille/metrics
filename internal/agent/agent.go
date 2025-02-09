@@ -9,8 +9,8 @@ import (
 	"crypto/rsa"
 	"encoding/json"
 	"fmt"
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/proto"
 	"net"
 	"net/http"
 	"net/url"
@@ -392,12 +392,12 @@ func (a *Agent) sendGRPCMetric(metric metrics.Metrics) error {
 		}
 	}
 
-	conn, err := grpc.Dial(a.GRPCAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	defer conn.Close()
+	conn, err := grpc.NewClient(a.GRPCAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		logger.Log.Error("failed to dial grpc server", zap.Error(err))
 		return err
 	}
+	defer conn.Close()
 
 	client := pb.NewMetricsServiceClient(conn)
 
