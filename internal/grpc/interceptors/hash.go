@@ -24,7 +24,7 @@ func HashInterceptor(hashKey []byte) grpc.UnaryServerInterceptor {
 		hashString := hex.EncodeToString(hash[:])
 
 		// Добавляем хэш в контекст для дальнейшего использования
-		ctx = context.WithValue(ctx, "request-hash", requestHashKey)
+		ctx = context.WithValue(ctx, requestHashKey, hashString)
 
 		logger.Log.Info("added hash to gRPC request", zap.String("hash", hashString))
 
