@@ -11,8 +11,11 @@ import (
 	"github.com/FollowLille/metrics/internal/logger"
 )
 
-// HashInterceptor добавляет хэш к gRPC-запросу
+type contextKey string
 
+const requestHashKey contextKey = "request-hash"
+
+// HashInterceptor добавляет хэш к gRPC-запросу
 func HashInterceptor(hashKey []byte) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		reqString := fmt.Sprintf("%v", req)
@@ -21,7 +24,7 @@ func HashInterceptor(hashKey []byte) grpc.UnaryServerInterceptor {
 		hashString := hex.EncodeToString(hash[:])
 
 		// Добавляем хэш в контекст для дальнейшего использования
-		ctx = context.WithValue(ctx, "request-hash", hashString)
+		ctx = context.WithValue(ctx, "request-hash", requestHashKey)
 
 		logger.Log.Info("added hash to gRPC request", zap.String("hash", hashString))
 

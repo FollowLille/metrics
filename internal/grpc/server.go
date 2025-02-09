@@ -68,7 +68,7 @@ func (s *Server) SendMetrics(ctx context.Context, req *pb.MetricsRequest) (*pb.S
 		for _, err := range errors {
 			errorMessage += "\n" + err.Error()
 		}
-		return nil, status.Errorf(codes.InvalidArgument, errorMessage)
+		return nil, status.Errorf(codes.InvalidArgument, "invalid argument: %s", errorMessage)
 	}
 	return &pb.SendMetricsResponse{Metrics: updatedMetrics}, nil
 }
