@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package metrics;
+
+option go_package = "proto";
+
+service MetricsService {
+  // Отправка метрик
+  rpc SendMetrics(MetricsRequest) returns (SendMetricsResponse);
+
+  // Запрос метрик
+  rpc GetMetrics(GetMetricsRequest) returns (GetMetricsResponse);
+}
+
+// Запрос для отправки метрик
+message MetricsRequest {
+  repeated Metric metrics = 1; // Список метрик
+}
+
+// Ответ для отправки метрик
+message SendMetricsResponse {
+  repeated Metric metrics = 1; // Список метрик
+}
+
+// Структура метрики
+message Metric {
+  string name = 1; // Имя метрики
+  string mtype = 2; // Тип метрики (counter или gauge)
+  optional int64 delta = 3; // Значение счетчика (для counter)
+  optional double value = 4; // Значение метрики (для gauge)
+}
+
+// Запрос для получения метрик
+message GetMetricsRequest {
+  string filter = 1; // Фильтр для выбора метрик
+}
+
+// Ответ для получения метрик
+message GetMetricsResponse {
+  repeated Metric metrics = 1; // Список метрик
+}

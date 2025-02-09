@@ -18,6 +18,7 @@ import (
 // Структура файла с флагами для инициализации через json
 type Config struct {
 	Address        string `json:"address"`
+	GRPCAddress    string `json:"grpc_address"`
 	HashKey        string `json:"hash_key"`
 	CryptoKeyPath  string `json:"crypto_key"`
 	ReportInterval int64  `json:"report_interval"`
@@ -31,6 +32,7 @@ var (
 	flagHashKey        string // ключ хэша
 	flagCryptoKeyPath  string // путь к файлу с ключом
 	flagConfigFilePath string // путь к файлу с конфигом
+	flagGRPCAddress    string // адрес gRPC
 	flagPollInterval   int64  // интервал опроса
 	flagReportInterval int64  // интервал отчета
 	flagRateLimit      int64  // лимит на кол-во одновременных воркеров
@@ -56,6 +58,7 @@ func parseFlags() error {
 	pflag.StringVarP(&flagHashKey, "hash-key", "k", "", "hash key")
 	pflag.StringVarP(&flagCryptoKeyPath, "crypto-key", "y", "", "path to crypto key file")
 	pflag.StringVarP(&flagConfigFilePath, "config", "c", "", "path to config file")
+	pflag.StringVarP(&flagGRPCAddress, "grpc-address", "g", "", "grpc address")
 	pflag.Int64VarP(&flagReportInterval, "report-interval", "r", 10, "report interval")
 	pflag.Int64VarP(&flagPollInterval, "poll-interval", "p", 2, "poll interval")
 	pflag.Int64VarP(&flagRateLimit, "rate-limit", "l", 4, "rate limit")
@@ -116,6 +119,7 @@ func parseFlags() error {
 		zap.String("hash-key", flagHashKey),
 		zap.String("crypto-key", flagCryptoKeyPath),
 		zap.String("config", flagConfigFilePath),
+		zap.String("grpc-address", flagGRPCAddress),
 		zap.Int64("report-interval", flagReportInterval),
 		zap.Int64("poll-interval", flagPollInterval),
 		zap.Int64("rate-limit", flagRateLimit),
@@ -123,6 +127,7 @@ func parseFlags() error {
 	return nil
 }
 
+// loadConfigFromFile загружает конфигурационный файл с заданным путём.
 func loadConfigFromFile(path string) error {
 	file, err := os.Open(path)
 	if err != nil {
@@ -137,23 +142,27 @@ func loadConfigFromFile(path string) error {
 	if err != nil {
 		return err
 	}
-	if cfg.Address == "" {
-		cfg.Address = flagAddress
+	if cfg.Address != "" {
+		flagAddress = cfg.Address
 	}
-	if cfg.HashKey == "" {
-		cfg.HashKey = flagHashKey
+	if cfg.HashKey != "" {
+		flagHashKey = cfg.HashKey
 	}
-	if cfg.CryptoKeyPath == "" {
-		cfg.CryptoKeyPath = flagCryptoKeyPath
+	if cfg.CryptoKeyPath != "" {
+		flagCryptoKeyPath = cfg.CryptoKeyPath
 	}
-	if cfg.ReportInterval == 0 {
-		cfg.ReportInterval = flagReportInterval
+	if cfg.GRPCAddress != "" {
+		flagGRPCAddress = cfg.GRPCAddress
 	}
-	if cfg.PollInterval == 0 {
-		cfg.PollInterval = flagPollInterval
+	if cfg.ReportInterval != 0 {
+		flagReportInterval = cfg.ReportInterval
 	}
-	if cfg.RateLimit == 0 {
-		cfg.RateLimit = flagRateLimit
+	if cfg.PollInterval != 0 {
+		flagPollInterval = cfg.PollInterval
 	}
+	if cfg.RateLimit != 0 {
+		flagRateLimit = cfg.RateLimit
+	}
+
 	return nil
 }

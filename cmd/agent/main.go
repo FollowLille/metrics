@@ -35,12 +35,11 @@ func main() {
 		return
 	}
 
-	a := Init(flagAddress, flagCryptoKeyPath)
+	a := Init(flagAddress, flagCryptoKeyPath, flagGRPCAddress)
 	logger.Initialize("info")
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT)
-
 	go a.Run()
 
 	sig := <-sigChan
@@ -61,7 +60,7 @@ func main() {
 //
 // Возвращаемое значение:
 //   - agent.Agent - инициализированный агент
-func Init(flags string, flagCryptoKeyPath string) *agent.Agent {
+func Init(flags string, flagCryptoKeyPath string, flagGRPCAddress string) *agent.Agent {
 	splitedAddress := strings.Split(flags, ":")
 	if len(splitedAddress) != 2 {
 		fmt.Printf("invalid address %s, expected host:port", flags)
@@ -83,6 +82,10 @@ func Init(flags string, flagCryptoKeyPath string) *agent.Agent {
 		}
 		a.PublicKey = publicKey
 	}
+	if flagGRPCAddress != "" {
+		a.GRPCAddress = flagGRPCAddress
+	}
+
 	a.ServerAddress = serverAddress
 	a.ServerPort = serverPort
 	a.HashKey = flagHashKey

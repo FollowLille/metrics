@@ -1,0 +1,6 @@
+{
+  "address": "localhost:8080",
+  "restore": true,
+  "store_interval": "1s",
+  "trusted_subnet": "192.168.0.0/16"
+}
