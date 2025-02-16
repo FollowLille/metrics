@@ -5,36 +5,44 @@ package agent
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/rsa"
 	"encoding/json"
 	"fmt"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/proto"
+	"net"
 	"net/http"
 	"net/url"
 	"sync"
 	"time"
 
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/FollowLille/metrics/internal/config"
 	"github.com/FollowLille/metrics/internal/crypto"
 	"github.com/FollowLille/metrics/internal/logger"
 	"github.com/FollowLille/metrics/internal/metrics"
 	"github.com/FollowLille/metrics/internal/retry"
+	pb "github.com/FollowLille/metrics/proto"
 )
 
 type Agent struct {
-	ServerAddress      string
-	HashKey            string
-	ServerPort         int64
-	PollCount          int64
-	RateLimit          int64
-	PollInterval       time.Duration
-	ReportSendInterval time.Duration
-	PublicKey          *rsa.PublicKey
-	metrics            map[string]float64
-	mutex              sync.Mutex
-	shutdown           chan struct{}
-	wg                 sync.WaitGroup
+	ServerAddress      string             // Адрес для прослушивания
+	HashKey            string             // Ключ для шифрования
+	ServerPort         int64              // Порт для прослушивания
+	PollCount          int64              // Количество попыток получения метрик
+	RateLimit          int64              // Максимальное количество метрик в секунду
+	PollInterval       time.Duration      // Интервал между попытками получения метрик
+	ReportSendInterval time.Duration      // Интервал между отправкой метрик
+	PublicKey          *rsa.PublicKey     // Публичный ключ для шифрования
+	GRPCAddress        string             // Адрес gRPC
+	metrics            map[string]float64 // Список метрик
+	mutex              sync.Mutex         // Мьютекс для синхронизации доступа к метрикам
+	shutdown           chan struct{}      // Канал для остановки агента
+	wg                 sync.WaitGroup     // Мьютекс для остановки горутин
 }
 
 // NewAgent инициализирует агента
@@ -212,7 +220,12 @@ func (a *Agent) ParallelSendMetrics() {
 //   - metricsChan - канал метрик
 func (a *Agent) sendByWorker(metricsChan <-chan metrics.Metrics) {
 	for m := range metricsChan {
-		err := a.sendSingleMetric(m)
+		var err error
+		if a.GRPCAddress != "" {
+			err = a.sendGRPCMetric(m)
+		} else {
+			err = a.sendSingleMetric(m)
+		}
 		if err != nil {
 			logger.Log.Error("failed to send single metric", zap.Error(err))
 		}
@@ -293,6 +306,7 @@ func (a *Agent) sendRequest(b bytes.Buffer) error {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Content-Encoding", "gzip")
+	req.Header.Set("X-Real-IP", getLocalIP())
 
 	if a.HashKey != "" {
 		hash := crypto.CalculateHash([]byte(a.HashKey), b.Bytes())
@@ -320,4 +334,94 @@ func (a *Agent) Shutdown() {
 	logger.Log.Info("Waiting for other workers")
 	a.wg.Wait()
 	logger.Log.Info("Agent stopped")
+}
+
+// getLocalIP возвращает IP локальной машины
+func getLocalIP() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return ""
+	}
+
+	for _, addr := range addrs {
+		if ipNet, ok := addr.(*net.IPNet); ok && !ipNet.IP.IsLoopback() {
+			if ipNet.IP.To4() != nil {
+				return ipNet.IP.String()
+			}
+		}
+	}
+	return ""
+}
+
+// sendGRPCMetric отправляет метрику
+// Принимает метрику
+//
+// Параметры:
+//   - metric - метрика
+//
+// Возвращаемое значение:
+//   - error
+func (a *Agent) sendGRPCMetric(metric metrics.Metrics) error {
+	pbMetric := &pb.Metric{
+		Name:  metric.ID,
+		Mtype: metric.MType,
+		Delta: metric.Delta,
+		Value: metric.Value,
+	}
+
+	var encryptedData []byte
+	var err error
+	if a.PublicKey != nil {
+		data, err := proto.Marshal(pbMetric)
+		if err != nil {
+			logger.Log.Error("failed to marshal metric", zap.String("metric", fmt.Sprintf("%+v", metric)), zap.Error(err))
+			return err
+		}
+
+		encrypted, err := crypto.Encrypt(a.PublicKey, data)
+		if err != nil {
+			logger.Log.Error("failed to encrypt data", zap.Error(err))
+			return err
+		}
+		encryptedData = encrypted
+	} else {
+		encryptedData, err = proto.Marshal(pbMetric)
+		if err != nil {
+			logger.Log.Error("failed to marshal metric", zap.String("metric", fmt.Sprintf("%+v", metric)), zap.Error(err))
+			return err
+		}
+	}
+
+	conn, err := grpc.NewClient(a.GRPCAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		logger.Log.Error("failed to dial grpc server", zap.Error(err))
+		return err
+	}
+	defer conn.Close()
+
+	client := pb.NewMetricsServiceClient(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	request := &pb.MetricsRequest{
+		Metrics: []*pb.Metric{
+			pbMetric,
+		},
+	}
+
+	if a.HashKey != "" {
+		hash := crypto.CalculateHash([]byte(a.HashKey), encryptedData)
+		ctx = metadata.AppendToOutgoingContext(ctx, "HashSHA256", hash)
+	}
+
+	response, err := client.SendMetrics(ctx, request)
+	if err != nil {
+		logger.Log.Error("failed to send metric", zap.String("metric", fmt.Sprintf("%+v", metric)), zap.Error(err))
+		return err
+	}
+
+	logger.Log.Info("sent metric", zap.String("metric", fmt.Sprintf("%+v", metric)))
+	logger.Log.Info("response", zap.String("response", fmt.Sprintf("%+v", response)))
+	return nil
 }
